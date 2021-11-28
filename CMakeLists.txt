@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
-project(template)
+project(variant)
 
 set(CMAKE_CXX_STANDARD 20)
 
 find_package(GTest REQUIRED)
 
-add_executable(tests tests.cpp)
+add_executable(tests tests.cpp test-classes.cpp)
 
 if (NOT MSVC)
   target_compile_options(tests PRIVATE -Wall -Wextra -Wshadow=compatible-local -Wno-sign-compare -pedantic)

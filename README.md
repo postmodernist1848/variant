@@ -1,5 +1,3 @@
-# Template for tasks of C++ course
+# variant
 
-> NOTE: Change project name in CMakeLists.txt for another task
-
-> NOTE: Change init-repo.sh:21 for another task
+Интерфейс и все свойства и гарантии должны соответствовать [std::variant](https://en.cppreference.com/w/cpp/utility/variant)
