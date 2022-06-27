@@ -15,4 +15,5 @@ gdb -q --batch \
     -ex 'set print frame-arguments all' \
     -ex 'run' \
     -ex 'thread apply all bt -frame-info source-and-location -full' \
+    -ex 'generate-core-file' \
     --args cmake-build-$1/tests
