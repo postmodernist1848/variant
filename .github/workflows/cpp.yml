@@ -7,12 +7,14 @@ jobs:
   test:
     name: Tests in ${{ matrix.build_type }} with ${{ matrix.compilerSetter }}
     runs-on: ubuntu-20.04
-    container: ubuntu:20.04
+    container: 
+      image: ubuntu:20.04
+      options: --privileged
     env:
       DEBIAN_FRONTEND: noninteractive
     strategy:
       matrix:
-        build_type: [Release, SanitizedDebug, RelWithDebInfo]
+        build_type: [Release, Debug, SanitizedDebug, RelWithDebInfo]
         compilerSetter: [CC=gcc CXX=g++, CC=clang CXX='clang++ -stdlib=libc++']
 
     steps:

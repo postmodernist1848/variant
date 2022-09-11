@@ -16,6 +16,15 @@
         "binaryDir": "cmake-build-Release"
       },
       {
+        "name": "Debug",
+        "displayName": "debug",
+        "description": "Debug build without sanitizers",
+        "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Debug"
+        },
+        "binaryDir": "cmake-build-Debug"
+      },
+      {
         "name": "SanitizedDebug",
         "displayName": "SanitizedDebug",
         "description": "Debug build with undefined, address and leak sanitizers enabled",
