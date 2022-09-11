@@ -8,7 +8,7 @@ find_package(GTest REQUIRED)
 add_executable(tests tests.cpp)
 
 if (NOT MSVC)
-  target_compile_options(tests PRIVATE -Wall -Wno-sign-compare -pedantic)
+  target_compile_options(tests PRIVATE -Wall -Wextra -Wshadow=compatible-local -Wno-sign-compare -pedantic)
 endif()
 
 option(USE_SANITIZERS "Enable to build with undefined,leak and address sanitizers" OFF)
