@@ -16,6 +16,7 @@ jobs:
           check-path: '.'
 
   test:
+    needs: formatting-check
     name: Tests in ${{ matrix.build_type }} with ${{ matrix.compilerSetter }}
     runs-on: ubuntu-20.04
     container: 
