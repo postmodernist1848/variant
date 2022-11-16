@@ -79,16 +79,14 @@ struct non_trivial_int_wrapper_t {
                                    non_trivial_int_wrapper_t const& rhs) noexcept {
     return lhs.x != rhs.x;
   }
-  friend constexpr bool operator<(non_trivial_int_wrapper_t const& lhs,
-                                  non_trivial_int_wrapper_t const& rhs) noexcept {
+  friend constexpr bool operator<(non_trivial_int_wrapper_t const& lhs, non_trivial_int_wrapper_t const& rhs) noexcept {
     return lhs.x < rhs.x;
   }
   friend constexpr bool operator<=(non_trivial_int_wrapper_t const& lhs,
                                    non_trivial_int_wrapper_t const& rhs) noexcept {
     return lhs.x <= rhs.x;
   }
-  friend constexpr bool operator>(non_trivial_int_wrapper_t const& lhs,
-                                  non_trivial_int_wrapper_t const& rhs) noexcept {
+  friend constexpr bool operator>(non_trivial_int_wrapper_t const& lhs, non_trivial_int_wrapper_t const& rhs) noexcept {
     return lhs.x > rhs.x;
   }
   friend constexpr bool operator>=(non_trivial_int_wrapper_t const& lhs,
