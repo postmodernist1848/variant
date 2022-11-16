@@ -27,7 +27,8 @@ jobs:
     strategy:
       matrix:
         build_type: [Release, Debug, SanitizedDebug, RelWithDebInfo]
-        compilerSetter: [CC=gcc CXX=g++, CC=clang CXX='clang++ -stdlib=libc++' ASAN_OPTIONS=alloc_dealloc_mismatch=0]
+        # clang-14 uses dwarf-5 which valgrind doesn't support yet
+        compilerSetter: [CC=gcc CXX=g++, CC=clang CXX='clang++ -gdwarf-4 -stdlib=libc++' ASAN_OPTIONS=alloc_dealloc_mismatch=0]
 
     steps:
     - name: dependencies
