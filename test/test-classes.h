@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cstddef>
 #include <exception>
-#include <string>
 #include <vector>
 
 template <class... Ts>
@@ -59,12 +58,14 @@ struct non_trivial_copy_assignment_t {
 
   explicit non_trivial_copy_assignment_t(int x) noexcept : x{x} {}
 
+  non_trivial_copy_assignment_t(const non_trivial_copy_assignment_t&) = default;
+
   non_trivial_copy_assignment_t& operator=(const non_trivial_copy_assignment_t& other) {
     if (this != &other) {
       x = other.x + DELTA;
     }
     return *this;
-  };
+  }
 
   int x;
 };
@@ -103,6 +104,11 @@ struct non_trivial_int_wrapper_t {
   friend constexpr bool operator>=(const non_trivial_int_wrapper_t& lhs,
                                    const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x >= rhs.x;
+  }
+
+  friend constexpr auto operator<=>(const non_trivial_int_wrapper_t& lhs,
+                                    const non_trivial_int_wrapper_t& rhs) noexcept {
+    return lhs.x <=> rhs.x;
   }
 
   int x;
@@ -208,8 +214,11 @@ struct sqr_sum_visitor {
 
 struct strange_visitor {
   strange_visitor() = default;
+
   strange_visitor(const strange_visitor&) = delete;
-  strange_visitor(strange_visitor&&) = default;
+  strange_visitor(strange_visitor&&) = delete;
+  strange_visitor& operator=(const strange_visitor&) = delete;
+  strange_visitor& operator=(strange_visitor&&) = delete;
 
   constexpr int operator()(int value) & {
     return value;
@@ -275,3 +284,71 @@ struct empty_comparable {
     throw std::exception();
   }
 };
+
+struct comparison_counters {
+  size_t equal = 0;
+  size_t not_equal = 0;
+  size_t less = 0;
+  size_t less_equal = 0;
+  size_t greater = 0;
+  size_t greater_equal = 0;
+  size_t spaceship = 0;
+};
+
+struct custom_comparison {
+  custom_comparison(int value, comparison_counters* counters) : value(value), counters(counters) {}
+
+  bool operator==(const custom_comparison& other) const {
+    ++counters->equal;
+    return this->value == other.value;
+  }
+
+  bool operator!=(const custom_comparison& other) const {
+    ++counters->not_equal;
+    return this->value != other.value;
+  }
+
+  bool operator<(const custom_comparison& other) const {
+    ++counters->less;
+    return this->value < other.value;
+  }
+
+  bool operator<=(const custom_comparison& other) const {
+    ++counters->less_equal;
+    return this->value <= other.value;
+  }
+
+  bool operator>(const custom_comparison& other) const {
+    ++counters->greater;
+    return this->value > other.value;
+  }
+
+  bool operator>=(const custom_comparison& other) const {
+    ++counters->greater_equal;
+    return this->value >= other.value;
+  }
+
+  auto operator<=>(const custom_comparison& other) const {
+    ++counters->spaceship;
+    return this->value <=> other.value;
+  }
+
+private:
+  int value;
+  comparison_counters* counters;
+};
+
+template <typename Ordering>
+struct custom_ordered {
+  bool operator==(const custom_ordered&) const {
+    return true;
+  }
+
+  Ordering operator<=>(const custom_ordered&) const noexcept {
+    return Ordering::equivalent;
+  }
+};
+
+using partially_ordered = custom_ordered<std::partial_ordering>;
+using weak_ordered = custom_ordered<std::weak_ordering>;
+using strong_ordered = custom_ordered<std::strong_ordering>;

@@ -1,7 +1,9 @@
-#include "gtest/gtest.h"
 #include "test-classes.h"
 #include "variant.h"
 
+#include <gtest/gtest.h>
+
+#include <compare>
 #include <exception>
 #include <string>
 #include <type_traits>
@@ -194,7 +196,7 @@ TEST(correctness, empty_ctor) {
   ASSERT_TRUE(holds_alternative<int>(v));
 }
 
-constexpr bool simple_copy_ctor_test() {
+static constexpr bool simple_copy_ctor_test() {
   variant<int, double> x{42.0};
   variant<int, double> other{x};
   if (x.index() != other.index()) {
@@ -222,7 +224,7 @@ TEST(correctness, copy_constructor_without_default) {
   ASSERT_EQ(get<1>(orig).x + 1, get<non_trivial_copy_t>(copy).x);
 }
 
-constexpr bool direct_init_copy_ctor() {
+static constexpr bool direct_init_copy_ctor() {
   variant<no_copy_assignment_t> x;
   variant<no_copy_assignment_t> other{x};
   if (!holds_alternative<no_copy_assignment_t>(x) || !holds_alternative<no_copy_assignment_t>(other)) {
@@ -235,7 +237,7 @@ TEST(correctness, copy_ctor2) {
   ASSERT_TRUE(direct_init_copy_ctor());
 }
 
-constexpr bool simple_move_ctor_test() {
+static constexpr bool simple_move_ctor_test() {
   {
     variant<no_copy_assignment_t> x;
     variant<no_copy_assignment_t> other{std::move(x)};
@@ -264,7 +266,7 @@ TEST(correctness, move_ctor) {
   ASSERT_TRUE(get<0>(y).has_coins() == 1);
 }
 
-constexpr bool simple_value_move_ctor() {
+static constexpr bool simple_value_move_ctor() {
   {
     only_movable x;
     variant<only_movable> y(std::move(x));
@@ -300,7 +302,7 @@ TEST(correctness, alternative_selection) {
     variant<int, std::reference_wrapper<double>> y = d;
     ASSERT_EQ(y.index(), 1);
   }
-  // For brave and truth
+  // For the brave and true
   {
     // See NB in #4 https://en.cppreference.com/w/cpp/utility/variant/variant
     variant<bool, std::string> v("asdasd");
@@ -386,7 +388,7 @@ TEST(correctness, emplace) {
   ASSERT_EQ(get<0>(v), t);
 }
 
-constexpr bool in_place_ctor() {
+static constexpr bool in_place_ctor() {
   variant<bool, double> x1(in_place_type<double>, 42);
   variant<bool, double> x2(in_place_index<1>, 42);
   return (x1.index() == 1 && get<1>(x1) == 42.0) && (x2.index() == 1 && get<1>(x2) == 42.0);
@@ -398,10 +400,12 @@ TEST(correctness, inplace_ctors) {
   in_place_ctor();
 
   variant<bool, std::string> why_not(in_place_type<bool>, "asdasd");
-  ASSERT_TRUE(why_not.index() == 0 && get<0>(why_not));
+  ASSERT_TRUE(why_not.index() == 0);
+  ASSERT_TRUE(get<0>(why_not));
 
   variant<bool, std::string> x2(in_place_index<0>, "asdasd");
-  ASSERT_TRUE(x2.index() == 0 && get<0>(x2));
+  ASSERT_TRUE(x2.index() == 0);
+  ASSERT_TRUE(get<0>(x2));
 
   variant<std::string, std::vector<int>, char> var{
       in_place_index<1>, std::vector<int>{1, 2, 3, 4, 5}
@@ -426,7 +430,7 @@ TEST(correctness, variant_exceptions1) {
   FAIL();
 }
 
-constexpr bool get_if_test_basic() {
+static constexpr bool get_if_test_basic() {
   variant<float, double, long double> v = 4.5;
   if (!get_if<double>(&v)) {
     return false;
@@ -517,8 +521,9 @@ TEST(visits, visit_valueless) {
     x.emplace<throwing_move_operator_t>(throwing_move_operator_t{});
   } catch (const std::exception& item) {
     ASSERT_TRUE(x.valueless_by_exception());
-    auto visitor = [](auto&& x) {};
+    auto visitor = []([[maybe_unused]] auto&& x) {};
     ASSERT_THROW(visit(visitor, x), bad_variant_access);
+    ASSERT_THROW(visit(visitor, x), std::exception);
     return;
   }
 
@@ -547,7 +552,13 @@ TEST(visits, visit_overload) {
   ASSERT_TRUE(visit(visitor, v));
 }
 
-constexpr bool test_visit() {
+TEST(visits, visit_overload_common) {
+  variant<double, int, bool> v = 42;
+  auto visitor = [](auto x) { return x; };
+  ASSERT_EQ(visit(visitor, v), 42);
+}
+
+static constexpr bool test_visit() {
   using V = variant<int, short, long>;
   V a1(1);
   V b1(2);
@@ -586,6 +597,16 @@ TEST(visits, visit_args_forwarding) {
   ASSERT_EQ(val3, 322);
   int val4 = visit([](only_movable&&) { return 322; }, std::move(var));
   ASSERT_EQ(val4, 322);
+}
+
+TEST(visits, visit_result_forwarding) {
+  variant<int> var;
+  int x = 42;
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int { return x; }, var)), int>));
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int& { return x; }, var)), int&>));
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int& { return x; }, var)), const int&>));
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int&& { return std::move(x); }, var)), int&&>));
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int&& { return std::move(x); }, var)), const int&&>));
 }
 
 TEST(swap, valueless) {
@@ -680,8 +701,17 @@ TEST(constructor, move_only) {
   ASSERT_FALSE(get<0>(a).has_coin());
 }
 
-template <class Var>
-constexpr bool test_equal(const Var& l, const Var& r, bool expect_equal) {
+TEST(constructor, ctad) {
+  using V = variant<int, double>;
+  V a(3);
+  variant b = a;
+  variant c = variant(a);
+  ASSERT_TRUE((std::is_same_v<decltype(b), V>));
+  ASSERT_TRUE((std::is_same_v<decltype(c), V>));
+}
+
+template <typename Var>
+static constexpr bool test_equal(const Var& l, const Var& r, bool expect_equal) {
   return ((l == r) == expect_equal) && (!(l != r) == expect_equal) && ((r == l) == expect_equal) &&
          (!(r != l) == expect_equal);
 }
@@ -705,8 +735,8 @@ TEST(relops, equality) {
   }
 }
 
-template <class Var>
-constexpr bool test_less(const Var& l, const Var& r, bool expect_less, bool expect_greater) {
+template <typename Var>
+static constexpr bool test_less(const Var& l, const Var& r, bool expect_less, bool expect_greater) {
   return ((l < r) == expect_less) && (!(l >= r) == expect_less) && ((l > r) == expect_greater) &&
          (!(l <= r) == expect_greater);
 }
@@ -750,5 +780,88 @@ TEST(relops, relational_empty) {
     ASSERT_TRUE(v2.valueless_by_exception());
     ASSERT_TRUE(test_less(v1, v2, false, false));
     ASSERT_TRUE(test_less(v2, v1, false, false));
+  }
+}
+
+TEST(relops, relational_custom) {
+  comparison_counters ca, cb;
+  variant<custom_comparison> a(in_place_index<0>, 42, &ca);
+  variant<custom_comparison> b(in_place_index<0>, 43, &cb);
+
+  EXPECT_FALSE(operator==(a, b));
+  EXPECT_TRUE(operator!=(a, b));
+  EXPECT_TRUE(operator<(a, b));
+  EXPECT_TRUE(operator<=(a, b));
+  EXPECT_FALSE(operator>(a, b));
+  EXPECT_FALSE(operator>=(a, b));
+  EXPECT_EQ(operator<=>(a, b), std::strong_ordering::less);
+
+  EXPECT_TRUE(operator==(a, a));
+  EXPECT_FALSE(operator!=(a, a));
+  EXPECT_FALSE(operator<(a, a));
+  EXPECT_TRUE(operator<=(a, a));
+  EXPECT_FALSE(operator>(a, a));
+  EXPECT_TRUE(operator>=(a, a));
+  EXPECT_EQ(operator<=>(a, a), std::strong_ordering::equal);
+
+  EXPECT_FALSE(operator==(b, a));
+  EXPECT_TRUE(operator!=(b, a));
+  EXPECT_FALSE(operator<(b, a));
+  EXPECT_FALSE(operator<=(b, a));
+  EXPECT_TRUE(operator>(b, a));
+  EXPECT_TRUE(operator>=(b, a));
+  EXPECT_EQ(operator<=>(b, a), std::strong_ordering::greater);
+
+  EXPECT_EQ(2, ca.equal);
+  EXPECT_EQ(2, ca.not_equal);
+  EXPECT_EQ(2, ca.less);
+  EXPECT_EQ(2, ca.less_equal);
+  EXPECT_EQ(2, ca.greater);
+  EXPECT_EQ(2, ca.greater_equal);
+  EXPECT_EQ(2, ca.spaceship);
+
+  EXPECT_EQ(1, cb.equal);
+  EXPECT_EQ(1, cb.not_equal);
+  EXPECT_EQ(1, cb.less);
+  EXPECT_EQ(1, cb.less_equal);
+  EXPECT_EQ(1, cb.greater);
+  EXPECT_EQ(1, cb.greater_equal);
+  EXPECT_EQ(1, cb.spaceship);
+}
+
+TEST(relops, three_way_category) {
+  using V1 = variant<partially_ordered>;
+  using V2 = variant<weak_ordered>;
+  using V3 = variant<strong_ordered>;
+  using V4 = variant<strong_ordered, weak_ordered>;
+  using V5 = variant<partially_ordered, weak_ordered, strong_ordered>;
+  using V6 = variant<strong_ordered, weak_ordered, partially_ordered>;
+
+  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V1>>));
+  EXPECT_TRUE((std::is_same_v<std::weak_ordering, std::compare_three_way_result_t<V2>>));
+  EXPECT_TRUE((std::is_same_v<std::strong_ordering, std::compare_three_way_result_t<V3>>));
+  EXPECT_TRUE((std::is_same_v<std::weak_ordering, std::compare_three_way_result_t<V4>>));
+  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V5>>));
+  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V6>>));
+}
+
+TEST(relops, three_way_propagate) {
+  using V = variant<int, double>;
+  constexpr double NAN = std::numeric_limits<double>::quiet_NaN();
+
+  {
+    V v1(in_place_type<int>, 1);
+    V v2(in_place_type<double>, NAN);
+    EXPECT_EQ(v1 <=> v2, std::partial_ordering::less);
+  }
+  {
+    V v1(in_place_type<double>, NAN);
+    V v2(in_place_type<int>, 2);
+    EXPECT_EQ(v1 <=> v2, std::partial_ordering::greater);
+  }
+  {
+    V v1(in_place_type<double>, NAN);
+    V v2(in_place_type<double>, NAN);
+    EXPECT_EQ(v1 <=> v2, std::partial_ordering::unordered);
   }
 }
