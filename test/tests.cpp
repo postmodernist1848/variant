@@ -847,21 +847,21 @@ TEST(relops, three_way_category) {
 
 TEST(relops, three_way_propagate) {
   using V = variant<int, double>;
-  constexpr double NAN = std::numeric_limits<double>::quiet_NaN();
+  constexpr double nan = std::numeric_limits<double>::quiet_NaN();
 
   {
     V v1(in_place_type<int>, 1);
-    V v2(in_place_type<double>, NAN);
+    V v2(in_place_type<double>, nan);
     EXPECT_EQ(v1 <=> v2, std::partial_ordering::less);
   }
   {
-    V v1(in_place_type<double>, NAN);
+    V v1(in_place_type<double>, nan);
     V v2(in_place_type<int>, 2);
     EXPECT_EQ(v1 <=> v2, std::partial_ordering::greater);
   }
   {
-    V v1(in_place_type<double>, NAN);
-    V v2(in_place_type<double>, NAN);
+    V v1(in_place_type<double>, nan);
+    V v2(in_place_type<double>, nan);
     EXPECT_EQ(v1 <=> v2, std::partial_ordering::unordered);
   }
 }
