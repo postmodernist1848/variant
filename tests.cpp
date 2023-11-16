@@ -1,12 +1,12 @@
+#include "gtest/gtest.h"
+#include "test-classes.h"
+#include "variant.h"
+
 #include <exception>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "test-classes.h"
-#include "variant.h"
-#include "gtest/gtest.h"
 
 TEST(traits, destructor) {
   using variant1 = variant<int, double, trivial_t>;
@@ -197,12 +197,15 @@ TEST(correctness, empty_ctor) {
 constexpr bool simple_copy_ctor_test() {
   variant<int, double> x{42.0};
   variant<int, double> other{x};
-  if (x.index() != other.index())
+  if (x.index() != other.index()) {
     return false;
-  if (get<1>(x) != get<1>(other))
+  }
+  if (get<1>(x) != get<1>(other)) {
     return false;
-  if (!holds_alternative<double>(x) || !holds_alternative<double>(other))
+  }
+  if (!holds_alternative<double>(x) || !holds_alternative<double>(other)) {
     return false;
+  }
   return true;
 }
 
@@ -222,8 +225,9 @@ TEST(correctness, copy_constructor_without_default) {
 constexpr bool direct_init_copy_ctor() {
   variant<no_copy_assignment_t> x;
   variant<no_copy_assignment_t> other{x};
-  if (!holds_alternative<no_copy_assignment_t>(x) || !holds_alternative<no_copy_assignment_t>(other))
+  if (!holds_alternative<no_copy_assignment_t>(x) || !holds_alternative<no_copy_assignment_t>(other)) {
     return false;
+  }
   return true;
 }
 
@@ -235,14 +239,16 @@ constexpr bool simple_move_ctor_test() {
   {
     variant<no_copy_assignment_t> x;
     variant<no_copy_assignment_t> other{std::move(x)};
-    if (!holds_alternative<no_copy_assignment_t>(x) || !holds_alternative<no_copy_assignment_t>(other))
+    if (!holds_alternative<no_copy_assignment_t>(x) || !holds_alternative<no_copy_assignment_t>(other)) {
       return false;
+    }
   }
   {
     variant<int, double> x{42};
     variant<int, double> y = std::move(x);
-    if (x.index() != y.index() || x.index() != 0 || get<0>(x) != get<0>(y))
+    if (x.index() != y.index() || x.index() != 0 || get<0>(x) != get<0>(y)) {
       return false;
+    }
   }
   return true;
 }
@@ -262,14 +268,16 @@ constexpr bool simple_value_move_ctor() {
   {
     only_movable x;
     variant<only_movable> y(std::move(x));
-    if (x.has_coin() || !get<0>(y).has_coin())
+    if (x.has_coin() || !get<0>(y).has_coin()) {
       return false;
+    }
   }
   {
     coin_wrapper x;
     variant<coin_wrapper> y(std::move(x));
-    if (x.has_coins() || !get<0>(y).has_coins())
+    if (x.has_coins() || !get<0>(y).has_coins()) {
       return false;
+    }
   }
   return true;
 }
@@ -337,6 +345,7 @@ TEST(correctness, assign) {
       throw std::exception();
     }
   };
+
   std::string s = "here comes some std::string";
   variant<std::string, bruh_conversion> v = s;
   ASSERT_ANY_THROW(v = 42);
@@ -394,7 +403,9 @@ TEST(correctness, inplace_ctors) {
   variant<bool, std::string> x2(in_place_index<0>, "asdasd");
   ASSERT_TRUE(x2.index() == 0 && get<0>(x2));
 
-  variant<std::string, std::vector<int>, char> var{in_place_index<1>, std::vector<int>{1, 2, 3, 4, 5}};
+  variant<std::string, std::vector<int>, char> var{
+      in_place_index<1>, std::vector<int>{1, 2, 3, 4, 5}
+  };
   auto other = std::vector<int>{1, 2, 3, 4, 5};
   ASSERT_EQ(get<1>(var), other);
   auto other2 = std::vector<int>(4, 42);
@@ -406,7 +417,7 @@ TEST(correctness, variant_exceptions1) {
   variant<throwing_move_operator_t> x;
   try {
     x.emplace<throwing_move_operator_t>(throwing_move_operator_t{});
-  } catch (std::exception const& item) {
+  } catch (const std::exception& item) {
     ASSERT_TRUE(x.valueless_by_exception());
     ASSERT_EQ(x.index(), variant_npos);
     ASSERT_THROW(get<0>(x), bad_variant_access);
@@ -417,15 +428,16 @@ TEST(correctness, variant_exceptions1) {
 
 constexpr bool get_if_test_basic() {
   variant<float, double, long double> v = 4.5;
-  if (!get_if<double>(&v))
+  if (!get_if<double>(&v)) {
     return false;
+  }
   return true;
 }
 
 static_assert(get_if_test_basic(), "Bad get_if behavior");
 
 TEST(correctness, multiple_same_types) {
-  variant<int, const int, int const, volatile int const> v;
+  variant<int, const int, const int, const volatile int> v;
   v.emplace<int>(4);
   ASSERT_TRUE(holds_alternative<int>(v));
   ASSERT_TRUE(v.index() == 0);
@@ -503,7 +515,7 @@ TEST(visits, visit_valueless) {
   variant<throwing_move_operator_t> x;
   try {
     x.emplace<throwing_move_operator_t>(throwing_move_operator_t{});
-  } catch (std::exception const& item) {
+  } catch (const std::exception& item) {
     ASSERT_TRUE(x.valueless_by_exception());
     auto visitor = [](auto&& x) {};
     ASSERT_THROW(visit(visitor, x), bad_variant_access);
@@ -514,7 +526,7 @@ TEST(visits, visit_valueless) {
 }
 
 TEST(visits, visit_on_multiple) {
-  variant<int, const int, int const, double> v;
+  variant<int, const int, const int, double> v;
   v.emplace<2>(42);
   auto visitor = [](auto x) -> int { return x; };
   auto result = visit(visitor, v);
@@ -524,13 +536,13 @@ TEST(visits, visit_on_multiple) {
   result = visit(visitor2, v);
   ASSERT_EQ(result, 42);
 
-  auto visitor3 = [](double const x) -> int { return x; };
+  auto visitor3 = [](const double x) -> int { return x; };
   result = visit(visitor3, v);
   ASSERT_EQ(result, 42);
 }
 
 TEST(visits, visit_overload) {
-  variant<char const*> v = "abce";
+  variant<const char*> v = "abce";
   auto visitor = overload{[](const std::string&) -> bool { return false; }, [](bool) -> bool { return true; }};
   ASSERT_TRUE(visit(visitor, v));
 }
@@ -566,11 +578,11 @@ TEST(visits, visit_visitor_forwarding) {
 
 TEST(visits, visit_args_forwarding) {
   variant<only_movable> var;
-  int val1 = visit([](only_movable const&) { return 322; }, var);
+  int val1 = visit([](const only_movable&) { return 322; }, var);
   ASSERT_EQ(val1, 322);
   int val2 = visit([](only_movable&) { return 322; }, var);
   ASSERT_EQ(val2, 322);
-  int val3 = visit([](only_movable const&&) { return 322; }, std::move(std::as_const(var)));
+  int val3 = visit([](const only_movable&&) { return 322; }, std::move(std::as_const(var)));
   ASSERT_EQ(val3, 322);
   int val4 = visit([](only_movable&&) { return 322; }, std::move(var));
   ASSERT_EQ(val4, 322);

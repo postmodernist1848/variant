@@ -26,15 +26,17 @@ struct throwing_default_t {
 };
 
 struct throwing_move_operator_t {
-  static size_t swap_called; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+  static size_t swap_called;
   throwing_move_operator_t() = default;
-  throwing_move_operator_t(throwing_move_operator_t&&) noexcept(false) { // NOLINT(bugprone-exception-escape)
+
+  throwing_move_operator_t(throwing_move_operator_t&&) noexcept(false) {
     throw std::exception();
   }
+
   throwing_move_operator_t& operator=(throwing_move_operator_t&&) = default;
 };
 
-void swap(throwing_move_operator_t&, throwing_move_operator_t&);
+void swap(throwing_move_operator_t&, throwing_move_operator_t&) noexcept;
 
 struct no_copy_t {
   no_copy_t(const no_copy_t&) = delete;
@@ -46,6 +48,7 @@ struct no_move_t {
 
 struct non_trivial_copy_t {
   explicit non_trivial_copy_t(int x) noexcept : x{x} {}
+
   non_trivial_copy_t(const non_trivial_copy_t& other) noexcept : x{other.x + 1} {}
 
   int x;
@@ -55,6 +58,7 @@ struct non_trivial_copy_assignment_t {
   static constexpr int DELTA = 5;
 
   explicit non_trivial_copy_assignment_t(int x) noexcept : x{x} {}
+
   non_trivial_copy_assignment_t& operator=(const non_trivial_copy_assignment_t& other) {
     if (this != &other) {
       x = other.x + DELTA;
@@ -66,33 +70,41 @@ struct non_trivial_copy_assignment_t {
 };
 
 struct non_trivial_int_wrapper_t {
-  non_trivial_int_wrapper_t(int x) : x{x} {} // NOLINT(google-explicit-constructor)
+  non_trivial_int_wrapper_t(int x) : x{x} {}
+
   non_trivial_int_wrapper_t& operator=(int i) {
     x = i + 1;
     return *this;
   }
-  friend constexpr bool operator==(non_trivial_int_wrapper_t const& lhs,
-                                   non_trivial_int_wrapper_t const& rhs) noexcept {
+
+  friend constexpr bool operator==(const non_trivial_int_wrapper_t& lhs,
+                                   const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x == rhs.x;
   }
-  friend constexpr bool operator!=(non_trivial_int_wrapper_t const& lhs,
-                                   non_trivial_int_wrapper_t const& rhs) noexcept {
+
+  friend constexpr bool operator!=(const non_trivial_int_wrapper_t& lhs,
+                                   const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x != rhs.x;
   }
-  friend constexpr bool operator<(non_trivial_int_wrapper_t const& lhs, non_trivial_int_wrapper_t const& rhs) noexcept {
+
+  friend constexpr bool operator<(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x < rhs.x;
   }
-  friend constexpr bool operator<=(non_trivial_int_wrapper_t const& lhs,
-                                   non_trivial_int_wrapper_t const& rhs) noexcept {
+
+  friend constexpr bool operator<=(const non_trivial_int_wrapper_t& lhs,
+                                   const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x <= rhs.x;
   }
-  friend constexpr bool operator>(non_trivial_int_wrapper_t const& lhs, non_trivial_int_wrapper_t const& rhs) noexcept {
+
+  friend constexpr bool operator>(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x > rhs.x;
   }
-  friend constexpr bool operator>=(non_trivial_int_wrapper_t const& lhs,
-                                   non_trivial_int_wrapper_t const& rhs) noexcept {
+
+  friend constexpr bool operator>=(const non_trivial_int_wrapper_t& lhs,
+                                   const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x >= rhs.x;
   }
+
   int x;
 };
 
@@ -106,14 +118,14 @@ struct no_copy_assignment_t {
 
 struct throwing_move_assignment_t {
   throwing_move_assignment_t(throwing_move_assignment_t&&) = default;
-  throwing_move_assignment_t&
-  operator=(throwing_move_assignment_t&&) noexcept(false) { // NOLINT(bugprone-exception-escape)
+
+  throwing_move_assignment_t& operator=(throwing_move_assignment_t&&) noexcept(false) {
     throw std::exception();
   }
 };
 
 struct only_movable {
-  static size_t move_assignment_called; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+  static size_t move_assignment_called;
 
   constexpr only_movable() = default;
 
@@ -137,16 +149,16 @@ struct only_movable {
     return coin;
   }
 
-  only_movable(only_movable const&) = delete;
-  only_movable& operator=(only_movable const&) = delete;
+  only_movable(const only_movable&) = delete;
+  only_movable& operator=(const only_movable&) = delete;
 
 private:
   bool coin{true};
 };
 
 struct yac_coin {
-  constexpr operator int() noexcept { // NOLINT(google-explicit-constructor)
-    return 42;                        // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+  constexpr operator int() noexcept {
+    return 42;
   }
 };
 
@@ -172,11 +184,11 @@ struct coin_wrapper {
     return coin;
   }
 
-  constexpr explicit coin_wrapper(yac_coin) noexcept : coin{17} {} // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+  constexpr explicit coin_wrapper(yac_coin) noexcept : coin{17} {}
 
-  constexpr coin_wrapper(coin_wrapper const& other) noexcept : coin(other.coin + 1) {}
+  constexpr coin_wrapper(const coin_wrapper& other) noexcept : coin(other.coin + 1) {}
 
-  constexpr coin_wrapper& operator=(coin_wrapper const& other) noexcept {
+  constexpr coin_wrapper& operator=(const coin_wrapper& other) noexcept {
     if (this != &other) {
       coin = other.coin + 1;
     }
@@ -196,56 +208,69 @@ struct sqr_sum_visitor {
 
 struct strange_visitor {
   strange_visitor() = default;
-  strange_visitor(strange_visitor const&) = delete;
+  strange_visitor(const strange_visitor&) = delete;
   strange_visitor(strange_visitor&&) = default;
 
   constexpr int operator()(int value) & {
     return value;
   }
+
   constexpr int operator()(int value) && {
     return value + 1;
   }
+
   constexpr int operator()(int value) const& {
     return value + 2;
   }
+
   constexpr int operator()(int value) const&& {
     return value + 3;
   }
 };
 
 struct broken_address {
-  broken_address* operator&() { // NOLINT(google-runtime-operator)
+  broken_address* operator&() {
     return nullptr;
   }
-  broken_address const* operator&() const { // NOLINT(google-runtime-operator)
+
+  const broken_address* operator&() const {
     return nullptr;
   }
+
   std::vector<int> x;
 };
 
 struct empty_comparable {
   empty_comparable() = default;
-  empty_comparable(empty_comparable&&) { // NOLINT(bugprone-exception-escape)
+
+  empty_comparable(empty_comparable&&) {
     throw std::exception();
   }
-  empty_comparable& operator=(empty_comparable&&) { // NOLINT(bugprone-exception-escape)
+
+  empty_comparable& operator=(empty_comparable&&) {
     throw std::exception();
   }
+
   bool operator==(const empty_comparable&) const {
     throw std::exception();
   }
+
   bool operator!=(const empty_comparable&) const {
     throw std::exception();
   }
+
   bool operator<(const empty_comparable&) const {
     throw std::exception();
   }
+
   bool operator<=(const empty_comparable&) const {
     throw std::exception();
   }
+
   bool operator>(const empty_comparable&) const {
     throw std::exception();
   }
+
   bool operator>=(const empty_comparable&) const {
     throw std::exception();
   }
