@@ -5,10 +5,36 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(GTest REQUIRED)
 
-add_executable(tests tests.cpp test-classes.cpp)
+file(GLOB TEST_SRC test/*.cpp)
+add_executable(tests ${TEST_SRC})
 
-if(NOT MSVC)
-    target_compile_options(tests PRIVATE -Wall -Wextra -Wshadow=compatible-local -Wno-sign-compare -pedantic)
+target_include_directories(tests PRIVATE src test)
+
+if(MSVC)
+    target_compile_options(tests PRIVATE /W4 /permissive-)
+    if(TREAT_WARNINGS_AS_ERRORS)
+        target_compile_options(tests PRIVATE /WX)
+    endif()
+else()
+    target_compile_options(tests PRIVATE -Wall -pedantic -Wextra -Wno-sign-compare)
+    target_compile_options(tests PRIVATE -Wold-style-cast -Wextra-semi -Woverloaded-virtual -Wzero-as-null-pointer-constant)
+    if(TREAT_WARNINGS_AS_ERRORS)
+        target_compile_options(tests PRIVATE -Werror -pedantic-errors)
+    endif()
+    target_compile_options(tests PRIVATE -Wno-self-move)
+endif()
+
+# Compiler specific warnings
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(tests PRIVATE -Wshadow=compatible-local)
+    target_compile_options(tests PRIVATE -Wduplicated-branches)
+    target_compile_options(tests PRIVATE -Wduplicated-cond)
+    # Disabled due to GCC bug
+    # target_compile_options(tests PRIVATE -Wnull-dereference)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(tests PRIVATE -Wshadow-uncaptured-local)
+    target_compile_options(tests PRIVATE -Wloop-analysis)
+    target_compile_options(tests PRIVATE -Wno-self-assign-overloaded)
 endif()
 
 option(USE_SANITIZERS "Enable to build with undefined,leak and address sanitizers" OFF)
