@@ -521,7 +521,7 @@ TEST(visits, visit_valueless) {
     x.emplace<throwing_move_operator_t>(throwing_move_operator_t{});
   } catch (const std::exception& item) {
     ASSERT_TRUE(x.valueless_by_exception());
-    auto visitor = []([[maybe_unused]] auto&& x) {};
+    auto visitor = [](auto&&) {};
     ASSERT_THROW(visit(visitor, x), bad_variant_access);
     ASSERT_THROW(visit(visitor, x), std::exception);
     return;
@@ -552,10 +552,10 @@ TEST(visits, visit_overload) {
   ASSERT_TRUE(visit(visitor, v));
 }
 
-TEST(visits, visit_overload_common) {
-  variant<double, int, bool> v = 42;
+TEST(visits, visit_overload_different_types) {
+  variant<int, double, bool> v = 3.14;
   auto visitor = [](auto x) { return x; };
-  ASSERT_EQ(visit(visitor, v), 42);
+  ASSERT_FLOAT_EQ(visit<float>(visitor, v), 3.14);
 }
 
 static constexpr bool test_visit() {
