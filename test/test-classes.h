@@ -54,15 +54,16 @@ struct non_trivial_copy_t {
 };
 
 struct non_trivial_copy_assignment_t {
-  static constexpr int DELTA = 5;
+  static constexpr int CTOR_DELTA = 5;
+  static constexpr int ASSIGN_DELTA = 6;
 
   explicit non_trivial_copy_assignment_t(int x) noexcept : x{x} {}
 
-  non_trivial_copy_assignment_t(const non_trivial_copy_assignment_t&) = default;
+  non_trivial_copy_assignment_t(const non_trivial_copy_assignment_t& other) noexcept : x(other.x + CTOR_DELTA) {}
 
-  non_trivial_copy_assignment_t& operator=(const non_trivial_copy_assignment_t& other) {
+  non_trivial_copy_assignment_t& operator=(const non_trivial_copy_assignment_t& other) noexcept {
     if (this != &other) {
-      x = other.x + DELTA;
+      x = other.x + ASSIGN_DELTA;
     }
     return *this;
   }

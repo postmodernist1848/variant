@@ -675,22 +675,27 @@ TEST(assignment, same_alternative) {
   V a(in_place_type<non_trivial_copy_assignment_t>, 42);
   V b(in_place_type<non_trivial_copy_assignment_t>, 14882);
   a = b;
-  ASSERT_EQ(get<1>(a).x, 14882 + non_trivial_copy_assignment_t::DELTA);
+  ASSERT_EQ(get<1>(a).x, 14882 + non_trivial_copy_assignment_t::ASSIGN_DELTA);
 }
 
 TEST(assignment, back_and_forth) {
   using V = variant<non_trivial_int_wrapper_t, non_trivial_copy_assignment_t>;
+  constexpr auto CTOR_DELTA = non_trivial_copy_assignment_t::CTOR_DELTA;
+  constexpr auto ASSIGN_DELTA = non_trivial_copy_assignment_t::ASSIGN_DELTA;
+
   V a = non_trivial_int_wrapper_t(42);
   V b = non_trivial_copy_assignment_t(14882);
   ASSERT_EQ(get<0>(a).x, 42);
+  ASSERT_EQ(get<1>(b).x, 14882 + CTOR_DELTA);
   a = 42;
   ASSERT_EQ(get<0>(a).x, 43);
   a = non_trivial_copy_assignment_t(42);
-  ASSERT_EQ(get<1>(a).x, 42);
+  ASSERT_EQ(get<1>(a).x, 42 + CTOR_DELTA);
   b = a;
-  ASSERT_EQ(get<1>(b).x, 47);
+  ASSERT_EQ(get<1>(b).x, 42 + CTOR_DELTA + ASSIGN_DELTA);
   a = b;
-  ASSERT_EQ(get<1>(a).x, 52);
+  ASSERT_EQ(get<1>(a).x, 42 + CTOR_DELTA + ASSIGN_DELTA * 2);
+  ASSERT_EQ(get<1>(b).x, 42 + CTOR_DELTA + ASSIGN_DELTA);
 }
 
 TEST(assignment, move_only) {
