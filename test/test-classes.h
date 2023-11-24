@@ -25,7 +25,8 @@ struct throwing_default_t {
 };
 
 struct throwing_move_operator_t {
-  static size_t swap_called;
+  inline static size_t swap_called = 0;
+
   throwing_move_operator_t() = default;
 
   throwing_move_operator_t(throwing_move_operator_t&&) noexcept(false) {
@@ -35,7 +36,9 @@ struct throwing_move_operator_t {
   throwing_move_operator_t& operator=(throwing_move_operator_t&&) = default;
 };
 
-void swap(throwing_move_operator_t&, throwing_move_operator_t&) noexcept;
+void swap(throwing_move_operator_t&, throwing_move_operator_t&) noexcept {
+  throwing_move_operator_t::swap_called += 1;
+}
 
 struct no_copy_t {
   no_copy_t(const no_copy_t&) = delete;
@@ -132,7 +135,7 @@ struct throwing_move_assignment_t {
 };
 
 struct only_movable {
-  static size_t move_assignment_called;
+  inline static size_t move_assignment_called = 0;
 
   constexpr only_movable() = default;
 
