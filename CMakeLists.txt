@@ -31,6 +31,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(tests PRIVATE -Wduplicated-cond)
     # Disabled due to GCC bug
     # target_compile_options(tests PRIVATE -Wnull-dereference)
+    # False positives
+    target_compile_options(tests PRIVATE -Wno-maybe-uninitialized)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(tests PRIVATE -Wshadow-uncaptured-local)
     target_compile_options(tests PRIVATE -Wloop-analysis)
