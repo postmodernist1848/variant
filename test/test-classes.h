@@ -356,3 +356,83 @@ struct custom_ordered {
 using partially_ordered = custom_ordered<std::partial_ordering>;
 using weak_ordered = custom_ordered<std::weak_ordering>;
 using strong_ordered = custom_ordered<std::strong_ordering>;
+
+struct throwing_members_params {
+  bool throwing_copy = false;
+  bool throwing_move = false;
+  bool throwing_copy_assignment = false;
+  bool throwing_move_assignment = false;
+};
+
+struct throwing_members_construct_tag {};
+
+template <throwing_members_params Params>
+struct throwing_members {
+  inline static size_t copy_ctor_calls;
+  inline static size_t move_ctor_calls;
+  inline static size_t copy_assignment_calls;
+  inline static size_t move_assignment_calls;
+
+  static void reset_counters() {
+    copy_ctor_calls = 0;
+    move_ctor_calls = 0;
+    copy_assignment_calls = 0;
+    move_assignment_calls = 0;
+  }
+
+  static size_t copy_calls() {
+    return copy_ctor_calls + copy_assignment_calls;
+  }
+
+  static size_t move_calls() {
+    return move_ctor_calls + move_assignment_calls;
+  }
+
+  throwing_members(throwing_members_construct_tag) noexcept {}
+
+  throwing_members(const throwing_members&) noexcept {
+    ++copy_ctor_calls;
+  }
+
+  throwing_members(const throwing_members&)
+    requires(Params.throwing_copy)
+  {
+    ++copy_ctor_calls;
+    throw std::exception();
+  }
+
+  throwing_members(throwing_members&&) noexcept {
+    ++move_ctor_calls;
+  }
+
+  throwing_members(throwing_members&&)
+    requires(Params.throwing_move)
+  {
+    ++move_ctor_calls;
+    throw std::exception();
+  }
+
+  throwing_members& operator=(const throwing_members&) noexcept {
+    ++copy_assignment_calls;
+    return *this;
+  }
+
+  throwing_members& operator=(const throwing_members&)
+    requires(Params.throwing_copy || Params.throwing_copy_assignment)
+  {
+    ++copy_assignment_calls;
+    throw std::exception();
+  }
+
+  throwing_members& operator=(throwing_members&&) noexcept {
+    ++move_assignment_calls;
+    return *this;
+  }
+
+  throwing_members& operator=(throwing_members&&)
+    requires(Params.throwing_move || Params.throwing_move_assignment)
+  {
+    ++move_assignment_calls;
+    throw std::exception();
+  }
+};

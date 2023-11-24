@@ -323,6 +323,7 @@ TEST(correctness, alternative_selection) {
   }
 }
 
+// TODO refactor
 TEST(correctness, valueless_by_exception) {
   using V = variant<std::vector<int>, throwing_move_operator_t>;
   auto v1 = std::vector{1, 2, 3};
@@ -715,6 +716,194 @@ TEST(assignment, different_alternatives) {
   V b = std::vector{1337, 14882};
   a = b;
   ASSERT_TRUE(holds_alternative<std::vector<int>>(a));
+}
+
+TEST(valueless_by_exception, copy_assign_nothrow) {
+  static constexpr throwing_members_params params = {};
+  using counted_calls = throwing_members<params>;
+  counted_calls::reset_counters();
+
+  using V = variant<std::vector<int>, counted_calls>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_NO_THROW(v1 = v2);
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(counted_calls::copy_calls(), 1);
+  ASSERT_EQ(counted_calls::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, copy_assign_throwing_copy) {
+  static constexpr throwing_members_params params = {.throwing_copy = true};
+  using throwing_copy = throwing_members<params>;
+  throwing_copy::reset_counters();
+
+  using V = variant<std::vector<int>, throwing_copy>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_ANY_THROW(v1 = v2);
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(throwing_copy::copy_calls(), 1);
+  ASSERT_EQ(throwing_copy::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, copy_assign_throwing_move) {
+  static constexpr throwing_members_params params = {.throwing_move = true};
+  using throwing_move = throwing_members<params>;
+  throwing_move::reset_counters();
+
+  using V = variant<std::vector<int>, throwing_move>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_NO_THROW(v1 = v2);
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(throwing_move::copy_calls(), 1);
+  ASSERT_EQ(throwing_move::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, copy_assign_throwing_copy_and_move) {
+  static constexpr throwing_members_params params = {.throwing_copy = true, .throwing_move = true};
+  using throwing_copy_and_move = throwing_members<params>;
+  throwing_copy_and_move::reset_counters();
+
+  using V = variant<std::vector<int>, throwing_copy_and_move>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_ANY_THROW(v1 = v2);
+  ASSERT_TRUE(v1.valueless_by_exception());
+  ASSERT_EQ(throwing_copy_and_move::copy_calls(), 1);
+  ASSERT_EQ(throwing_copy_and_move::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, move_assign_nothrow) {
+  static constexpr throwing_members_params params = {};
+  using counted_calls = throwing_members<params>;
+  counted_calls::reset_counters();
+
+  using V = variant<std::vector<int>, counted_calls>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_NO_THROW(v1 = std::move(v2));
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(counted_calls::copy_calls(), 0);
+  ASSERT_EQ(counted_calls::move_calls(), 1);
+}
+
+TEST(valueless_by_exception, move_assign_throwing_copy) {
+  static constexpr throwing_members_params params = {.throwing_copy = true};
+  using throwing_copy = throwing_members<params>;
+  throwing_copy::reset_counters();
+
+  using V = variant<std::vector<int>, throwing_copy>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_NO_THROW(v1 = std::move(v2));
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(throwing_copy::copy_calls(), 0);
+  ASSERT_EQ(throwing_copy::move_calls(), 1);
+}
+
+TEST(valueless_by_exception, move_assign_throwing_move) {
+  static constexpr throwing_members_params params = {.throwing_move = true};
+  using throwing_move = throwing_members<params>;
+  throwing_move::reset_counters();
+
+  using V = variant<std::vector<int>, throwing_move>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_ANY_THROW(v1 = std::move(v2));
+  ASSERT_TRUE(v1.valueless_by_exception());
+  ASSERT_EQ(throwing_move::copy_calls(), 0);
+  ASSERT_EQ(throwing_move::move_calls(), 1);
+}
+
+TEST(valueless_by_exception, move_assign_throwing_copy_and_move) {
+  static constexpr throwing_members_params params = {.throwing_copy = true, .throwing_move = true};
+  using throwing_copy_and_move = throwing_members<params>;
+  throwing_copy_and_move::reset_counters();
+
+  using V = variant<std::vector<int>, throwing_copy_and_move>;
+  V v1 = std::vector{1, 2, 3};
+  V v2 = throwing_members_construct_tag{};
+
+  ASSERT_ANY_THROW(v1 = std::move(v2));
+  ASSERT_TRUE(v1.valueless_by_exception());
+  ASSERT_EQ(throwing_copy_and_move::copy_calls(), 0);
+  ASSERT_EQ(throwing_copy_and_move::move_calls(), 1);
+}
+
+TEST(valueless_by_exception, converting_assign_nothrow) {
+  static constexpr throwing_members_params params = {};
+  using counted_calls = throwing_members<params>;
+  counted_calls::reset_counters();
+
+  using V = variant<std::vector<int>, counted_calls>;
+  V v1 = std::vector{1, 2, 3};
+
+  ASSERT_NO_THROW(v1 = throwing_members_construct_tag{});
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(counted_calls::copy_calls(), 0);
+  ASSERT_EQ(counted_calls::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, converting_assign_throwing_conv) {
+  static constexpr throwing_members_params params = {};
+
+  struct counted_calls : throwing_members<params> {
+    counted_calls(throwing_members_construct_tag t) : throwing_members(t) {
+      throw std::exception();
+    }
+  };
+
+  counted_calls::reset_counters();
+
+  using V = variant<std::vector<int>, counted_calls>;
+  V v1 = std::vector{1, 2, 3};
+
+  ASSERT_ANY_THROW(v1 = throwing_members_construct_tag{});
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(counted_calls::copy_calls(), 0);
+  ASSERT_EQ(counted_calls::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, converting_assign_throwing_move) {
+  static constexpr throwing_members_params params = {.throwing_move = true};
+  using counted_calls = throwing_members<params>;
+  counted_calls::reset_counters();
+
+  using V = variant<std::vector<int>, counted_calls>;
+  V v1 = std::vector{1, 2, 3};
+
+  ASSERT_NO_THROW(v1 = throwing_members_construct_tag{});
+  ASSERT_FALSE(v1.valueless_by_exception());
+  ASSERT_EQ(counted_calls::copy_calls(), 0);
+  ASSERT_EQ(counted_calls::move_calls(), 0);
+}
+
+TEST(valueless_by_exception, converting_assign_throwing_conv_and_move) {
+  static constexpr throwing_members_params params = {.throwing_move = true};
+
+  struct counted_calls : throwing_members<params> {
+    counted_calls(throwing_members_construct_tag t) : throwing_members(t) {
+      throw std::exception();
+    }
+  };
+
+  counted_calls::reset_counters();
+
+  using V = variant<std::vector<int>, counted_calls>;
+  V v1 = std::vector{1, 2, 3};
+
+  ASSERT_ANY_THROW(v1 = throwing_members_construct_tag{});
+  ASSERT_TRUE(v1.valueless_by_exception());
+  ASSERT_EQ(counted_calls::copy_calls(), 0);
+  ASSERT_EQ(counted_calls::move_calls(), 0);
 }
 
 TEST(constructor, move_only) {
