@@ -305,8 +305,8 @@ TEST(correctness, alternative_selection) {
   }
   {
     double d = 3.14;
-    variant<int, std::reference_wrapper<double>> y = d;
-    ASSERT_EQ(y.index(), 1);
+    variant<int, std::reference_wrapper<double>> v = d;
+    ASSERT_EQ(v.index(), 1);
   }
   // For the brave and true
   {
@@ -319,8 +319,24 @@ TEST(correctness, alternative_selection) {
     ASSERT_EQ(v.index(), 0);
   }
   {
-    variant<std::vector<int>, bool, std::string> a(true);
-    ASSERT_EQ(a.index(), 1);
+    variant<std::vector<int>, bool, std::string> v(true);
+    ASSERT_EQ(v.index(), 1);
+  }
+  {
+    struct to {};
+
+    struct from {
+      constexpr operator to() const noexcept {
+        return {};
+      }
+
+      explicit constexpr operator double() const noexcept {
+        return 3.14;
+      }
+    };
+
+    variant<double, to> v(from{});
+    ASSERT_EQ(v.index(), 1);
   }
 }
 
