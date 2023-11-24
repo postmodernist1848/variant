@@ -5,6 +5,7 @@
 
 #include <compare>
 #include <exception>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -445,6 +446,7 @@ TEST(correctness, variant_exceptions1) {
     ASSERT_TRUE(x.valueless_by_exception());
     ASSERT_EQ(x.index(), variant_npos);
     ASSERT_THROW(get<0>(x), bad_variant_access);
+    ASSERT_THROW(get<0>(x), std::exception);
     return;
   }
   FAIL();
