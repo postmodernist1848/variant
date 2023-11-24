@@ -24,11 +24,16 @@ TEST(traits, destructor) {
 TEST(traits, default_constructor) {
   using variant1 = variant<std::string, int, std::vector<int>>;
   using variant2 = variant<no_default_t, int>;
-  using variant3 = variant<throwing_default_t, int, double>;
+  using variant3 = variant<int, no_default_t>;
+  using variant4 = variant<throwing_default_t, int, double>;
+  using variant5 = variant<int, double, throwing_default_t>;
   ASSERT_TRUE(std::is_default_constructible_v<variant1>);
   ASSERT_FALSE(std::is_default_constructible_v<variant2>);
+  ASSERT_TRUE(std::is_default_constructible_v<variant3>);
+  ASSERT_TRUE(std::is_default_constructible_v<variant4>);
   ASSERT_TRUE(std::is_nothrow_default_constructible_v<variant1>);
-  ASSERT_FALSE(std::is_nothrow_default_constructible_v<variant3>);
+  ASSERT_FALSE(std::is_nothrow_default_constructible_v<variant4>);
+  ASSERT_TRUE(std::is_nothrow_default_constructible_v<variant5>);
 }
 
 TEST(traits, copy_constructor) {
