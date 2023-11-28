@@ -253,6 +253,11 @@ TEST(correctness, copy_ctor2) {
   ASSERT_TRUE(direct_init_copy_ctor());
 }
 
+TEST(correctness, destructor) {
+  { variant<non_trivially_destructible_t> v; }
+  ASSERT_EQ(non_trivially_destructible_t::destructor_count, 1);
+}
+
 static constexpr bool simple_move_ctor_test() {
   {
     variant<no_copy_assignment_t> x;
@@ -1057,6 +1062,50 @@ TEST(constructor, converting_ctor_const) {
   EXPECT_EQ(get<0>(v3), 9);
   EXPECT_EQ(get<0>(v4), 10);
   EXPECT_EQ(get<0>(v5), 9);
+}
+
+TEST(destructor, emplace) {
+  non_trivially_destructible_t::reset_counters();
+  {
+    variant<non_trivially_destructible_t, int> v;
+    int x = 14882;
+    v.emplace<1>(x);
+    ASSERT_EQ(non_trivially_destructible_t::destructor_count, 1);
+  }
+  {
+    variant<non_trivially_destructible_t, int> v;
+    int x = 14882;
+    v.emplace<int>(x);
+    ASSERT_EQ(non_trivially_destructible_t::destructor_count, 2);
+  }
+}
+
+TEST(destructor, copy_assignment) {
+  non_trivially_destructible_t::reset_counters();
+  {
+    variant<non_trivially_destructible_t, int> v;
+    variant<non_trivially_destructible_t, int> u = 14882;
+    v = u;
+  }
+  ASSERT_EQ(non_trivially_destructible_t::destructor_count, 1);
+}
+
+TEST(destructor, move_assignment) {
+  non_trivially_destructible_t::reset_counters();
+  {
+    variant<non_trivially_destructible_t, int> v;
+    v = variant<non_trivially_destructible_t, int>(14882);
+  }
+  ASSERT_EQ(non_trivially_destructible_t::destructor_count, 1);
+}
+
+TEST(destructor, converting_assignment) {
+  non_trivially_destructible_t::reset_counters();
+  {
+    variant<non_trivially_destructible_t, int> v;
+    v = 14882;
+  }
+  ASSERT_EQ(non_trivially_destructible_t::destructor_count, 1);
 }
 
 template <typename Var>

@@ -18,6 +18,18 @@ struct no_default_t {
   no_default_t() = delete;
 };
 
+struct non_trivially_destructible_t {
+  inline static size_t destructor_count = 0;
+
+  static void reset_counters() {
+    destructor_count = 0;
+  }
+
+  ~non_trivially_destructible_t() {
+    ++destructor_count;
+  }
+};
+
 struct throwing_default_t {
   throwing_default_t() {
     throw std::exception();
