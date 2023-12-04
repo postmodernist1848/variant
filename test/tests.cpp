@@ -425,6 +425,14 @@ TEST(correctness, emplace) {
   ASSERT_EQ(get<0>(v), t);
 }
 
+TEST(correctness, emplace_conversions) {
+  using V = variant<int, std::string>;
+  V v;
+  ASSERT_EQ(get<0>(v), 0);
+  v.emplace<1>(3.14, static_cast<int>('a'));
+  ASSERT_EQ(get<1>(v), "aaa");
+}
+
 static constexpr bool in_place_ctor() {
   variant<bool, double> x1(in_place_type<double>, 42);
   variant<bool, double> x2(in_place_index<1>, 42);
