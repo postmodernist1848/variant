@@ -24,6 +24,16 @@ struct throwing_default_t {
   }
 };
 
+struct throwing_swap_t {
+  friend void swap(throwing_swap_t&, throwing_swap_t&) {
+    throw std::exception();
+  }
+};
+
+struct non_swappable_t {
+  friend void swap(non_swappable_t& lhs, non_swappable_t& rhs) = delete;
+};
+
 struct throwing_move_operator_t {
   inline static size_t swap_called = 0;
 
@@ -52,6 +62,24 @@ struct non_trivial_copy_t {
   explicit non_trivial_copy_t(int x) noexcept : x{x} {}
 
   non_trivial_copy_t(const non_trivial_copy_t& other) noexcept : x{other.x + 1} {}
+
+  int x;
+};
+
+struct move_but_no_move_assignment_t {
+  move_but_no_move_assignment_t() = default;
+
+  move_but_no_move_assignment_t(move_but_no_move_assignment_t&& other) noexcept : x(other.x) {}
+
+  move_but_no_move_assignment_t(int val) noexcept : x(val) {}
+
+  move_but_no_move_assignment_t(const move_but_no_move_assignment_t& other) = delete;
+  move_but_no_move_assignment_t& operator=(const move_but_no_move_assignment_t& other) = delete;
+  move_but_no_move_assignment_t& operator=(move_but_no_move_assignment_t&& other) = delete;
+
+  friend void swap(move_but_no_move_assignment_t& lhs, move_but_no_move_assignment_t& rhs) noexcept {
+    std::swap(lhs.x, rhs.x);
+  }
 
   int x;
 };

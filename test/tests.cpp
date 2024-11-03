@@ -169,6 +169,16 @@ TEST(traits, converting_assignment) {
   ASSERT_FALSE(assignment6);
 }
 
+TEST(traits, swap) {
+  using variant_nothrow_swap = variant<int, bool>;
+  using variant_throwing_swap = variant<throwing_swap_t, long>;
+  using variant_non_move_assignable = variant<move_but_no_move_assignment_t, int>;
+
+  ASSERT_TRUE(std::is_nothrow_swappable_v<variant_nothrow_swap>);
+  ASSERT_TRUE(std::is_nothrow_swappable_v<variant_non_move_assignable>);
+  ASSERT_FALSE(std::is_nothrow_swappable_v<variant_throwing_swap>);
+}
+
 TEST(traits, variant_size) {
   using variant1 = variant<int, std::string, variant<int, std::vector<int>, size_t>, bool>;
   ASSERT_EQ(variant_size_v<variant1>, 4);
@@ -697,6 +707,22 @@ TEST(swap, different_alternatives) {
   ASSERT_EQ(get<int>(c), 42);
 }
 
+TEST(swap, swap_no_move_assigment) {
+  using V = variant<move_but_no_move_assignment_t, long>;
+
+  V v1 = 10L;
+  V v2 = move_but_no_move_assignment_t(5);
+  V v3 = move_but_no_move_assignment_t(6);
+  v1.swap(v2);
+  ASSERT_TRUE(holds_alternative<move_but_no_move_assignment_t>(v1));
+  ASSERT_TRUE(holds_alternative<long>(v2));
+  ASSERT_EQ(get<move_but_no_move_assignment_t>(v1).x, 5);
+  ASSERT_EQ(get<long>(v2), 10);
+  v1.swap(v3);
+  ASSERT_EQ(get<move_but_no_move_assignment_t>(v1).x, 6);
+  ASSERT_EQ(get<move_but_no_move_assignment_t>(v3).x, 5);
+}
+
 TEST(assignment, same_alternative) {
   using V = variant<non_trivial_int_wrapper_t, non_trivial_copy_assignment_t>;
   V a(in_place_type<non_trivial_copy_assignment_t>, 42);
@@ -742,6 +768,54 @@ TEST(assignment, different_alternatives) {
   V b = std::vector{1337, 14882};
   a = b;
   ASSERT_TRUE(holds_alternative<std::vector<int>>(a));
+}
+
+TEST(assignment, converting_assignment2) {
+  using V = variant<int, long>;
+  int i2 = 7;
+  const int ci2 = 6;
+
+  V v1 = 11;
+  V v2 = v1;
+  V v3 = v1;
+  V v4 = v1;
+  V v5 = v1;
+
+  v1 = 8;
+  v2 = i2;
+  v3 = ci2;
+  v4 = std::move(i2);
+  v5 = std::move(ci2);
+
+  EXPECT_EQ(get<0>(v1), 8);
+  EXPECT_EQ(get<0>(v2), 7);
+  EXPECT_EQ(get<0>(v3), 6);
+  EXPECT_EQ(get<0>(v4), 7);
+  EXPECT_EQ(get<0>(v5), 6);
+}
+
+TEST(assignment, converting_assignment2_const) {
+  using V = variant<const int, long>;
+  long l2 = 7;
+  const long cl2 = 6;
+
+  V v1 = 11;
+  V v2 = v1;
+  V v3 = v1;
+  V v4 = v1;
+  V v5 = v1;
+
+  v1 = 8L;
+  v2 = l2;
+  v3 = cl2;
+  v4 = std::move(l2);
+  v5 = std::move(cl2);
+
+  EXPECT_EQ(get<1>(v1), 8);
+  EXPECT_EQ(get<1>(v2), 7);
+  EXPECT_EQ(get<1>(v3), 6);
+  EXPECT_EQ(get<1>(v4), 7);
+  EXPECT_EQ(get<1>(v5), 6);
 }
 
 TEST(valueless_by_exception, copy_assign_nothrow) {
@@ -947,6 +1021,42 @@ TEST(constructor, ctad) {
   variant c = variant(a);
   ASSERT_TRUE((std::is_same_v<decltype(b), V>));
   ASSERT_TRUE((std::is_same_v<decltype(c), V>));
+}
+
+TEST(constructor, converting_ctor) {
+  using V = variant<int, long>;
+  int i1 = 10;
+  const int ci1 = 9;
+
+  V v1 = 11;
+  V v2 = i1;
+  V v3 = ci1;
+  V v4 = std::move(i1);
+  V v5 = std::move(ci1);
+
+  EXPECT_EQ(get<0>(v1), 11);
+  EXPECT_EQ(get<0>(v2), 10);
+  EXPECT_EQ(get<0>(v3), 9);
+  EXPECT_EQ(get<0>(v4), 10);
+  EXPECT_EQ(get<0>(v5), 9);
+}
+
+TEST(constructor, converting_ctor_const) {
+  using V = variant<const int, long>;
+  int i1 = 10;
+  const int ci1 = 9;
+
+  V v1 = 11;
+  V v2 = i1;
+  V v3 = ci1;
+  V v4 = std::move(i1);
+  V v5 = std::move(ci1);
+
+  EXPECT_EQ(get<0>(v1), 11);
+  EXPECT_EQ(get<0>(v2), 10);
+  EXPECT_EQ(get<0>(v3), 9);
+  EXPECT_EQ(get<0>(v4), 10);
+  EXPECT_EQ(get<0>(v5), 9);
 }
 
 template <typename Var>
