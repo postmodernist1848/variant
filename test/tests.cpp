@@ -228,9 +228,11 @@ TEST(correctness, const_types_copy) {
 }
 
 struct strange_non_trivial_move {
-  explicit strange_non_trivial_move(int x) : x(x) {}
+  explicit strange_non_trivial_move(int x)
+      : x(x) {}
 
-  strange_non_trivial_move(const strange_non_trivial_move&& other) : x(other.x + 1) {}
+  strange_non_trivial_move(const strange_non_trivial_move&& other)
+      : x(other.x + 1) {}
 
   int x;
 };
@@ -436,7 +438,10 @@ TEST(correctness, visit) {
         ASSERT_EQ(d, 0.5);
         was_called = true;
       },
-      v1, v2, v3);
+      v1,
+      v2,
+      v3
+  );
   ASSERT_TRUE(was_called);
 }
 
@@ -498,9 +503,7 @@ TEST(correctness, inplace_ctors) {
   ASSERT_TRUE(x2.index() == 0);
   ASSERT_TRUE(get<0>(x2));
 
-  variant<std::string, std::vector<int>, char> var{
-      in_place_index<1>, std::vector<int>{1, 2, 3, 4, 5}
-  };
+  variant<std::string, std::vector<int>, char> var{in_place_index<1>, std::vector<int>{1, 2, 3, 4, 5}};
   auto other = std::vector<int>{1, 2, 3, 4, 5};
   ASSERT_EQ(get<1>(var), other);
   auto other2 = std::vector<int>(4, 42);
@@ -613,7 +616,8 @@ TEST(visits, visit_valueless) {
     x.emplace<throwing_move_operator_t>(throwing_move_operator_t{});
   } catch (const std::exception& item) {
     ASSERT_TRUE(x.valueless_by_exception());
-    auto visitor = [](auto&&) {};
+    auto visitor = [](auto&&) {
+    };
     ASSERT_THROW(visit(visitor, x), bad_variant_access);
     ASSERT_THROW(visit(visitor, x), std::exception);
     return;
@@ -625,28 +629,41 @@ TEST(visits, visit_valueless) {
 TEST(visits, visit_on_multiple) {
   variant<int, const int, const int, double> v;
   v.emplace<2>(42);
-  auto visitor = [](auto x) -> int { return x; };
+  auto visitor = [](auto x) -> int {
+    return x;
+  };
   auto result = visit(visitor, v);
   ASSERT_EQ(result, 42);
 
-  auto visitor2 = [](int x) -> int { return x; };
+  auto visitor2 = [](int x) -> int {
+    return x;
+  };
   result = visit(visitor2, v);
   ASSERT_EQ(result, 42);
 
-  auto visitor3 = [](const double x) -> int { return x; };
+  auto visitor3 = [](const double x) -> int {
+    return x;
+  };
   result = visit(visitor3, v);
   ASSERT_EQ(result, 42);
 }
 
 TEST(visits, visit_overload) {
   variant<const char*> v = "abce";
-  auto visitor = overload{[](const std::string&) -> bool { return false; }, [](bool) -> bool { return true; }};
+  auto visitor = overload{
+      [](const std::string&) -> bool { return false; },
+      [](bool) -> bool {
+        return true;
+      }
+  };
   ASSERT_TRUE(visit(visitor, v));
 }
 
 TEST(visits, visit_overload_different_types) {
   variant<int, double, bool> v = 3.14;
-  auto visitor = [](auto x) { return x; };
+  auto visitor = [](auto x) {
+    return x;
+  };
   ASSERT_FLOAT_EQ(visit<float>(visitor, v), 3.14);
 }
 
@@ -694,11 +711,11 @@ TEST(visits, visit_args_forwarding) {
 TEST(visits, visit_result_forwarding) {
   variant<int> var;
   int x = 42;
-  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int { return x; }, var)), int>));
-  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int& { return x; }, var)), int&>));
-  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int& { return x; }, var)), const int&>));
-  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int&& { return std::move(x); }, var)), int&&>));
-  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int&& { return std::move(x); }, var)), const int&&>));
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int { return x; }, var)), int>) );
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int& { return x; }, var)), int&>) );
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int& { return x; }, var)), const int&>) );
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> int&& { return std::move(x); }, var)), int&&>) );
+  ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int&& { return std::move(x); }, var)), const int&&>) );
 }
 
 TEST(swap, valueless) {
@@ -992,7 +1009,8 @@ TEST(valueless_by_exception, converting_assign_throwing_conv) {
   static constexpr throwing_members_params params = {};
 
   struct counted_calls : throwing_members<params> {
-    counted_calls(throwing_members_construct_tag t) : throwing_members(t) {
+    counted_calls(throwing_members_construct_tag t)
+        : throwing_members(t) {
       throw std::exception();
     }
   };
@@ -1026,7 +1044,8 @@ TEST(valueless_by_exception, converting_assign_throwing_conv_and_move) {
   static constexpr throwing_members_params params = {.throwing_move = true};
 
   struct counted_calls : throwing_members<params> {
-    counted_calls(throwing_members_construct_tag t) : throwing_members(t) {
+    counted_calls(throwing_members_construct_tag t)
+        : throwing_members(t) {
       throw std::exception();
     }
   };
@@ -1055,8 +1074,8 @@ TEST(constructor, ctad) {
   V a(3);
   variant b = a;
   variant c = variant(a);
-  ASSERT_TRUE((std::is_same_v<decltype(b), V>));
-  ASSERT_TRUE((std::is_same_v<decltype(c), V>));
+  ASSERT_TRUE((std::is_same_v<decltype(b), V>) );
+  ASSERT_TRUE((std::is_same_v<decltype(c), V>) );
 }
 
 TEST(constructor, converting_ctor) {
@@ -1266,12 +1285,12 @@ TEST(relops, three_way_category) {
   using V5 = variant<partially_ordered, weak_ordered, strong_ordered>;
   using V6 = variant<strong_ordered, weak_ordered, partially_ordered>;
 
-  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V1>>));
-  EXPECT_TRUE((std::is_same_v<std::weak_ordering, std::compare_three_way_result_t<V2>>));
-  EXPECT_TRUE((std::is_same_v<std::strong_ordering, std::compare_three_way_result_t<V3>>));
-  EXPECT_TRUE((std::is_same_v<std::weak_ordering, std::compare_three_way_result_t<V4>>));
-  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V5>>));
-  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V6>>));
+  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V1>>) );
+  EXPECT_TRUE((std::is_same_v<std::weak_ordering, std::compare_three_way_result_t<V2>>) );
+  EXPECT_TRUE((std::is_same_v<std::strong_ordering, std::compare_three_way_result_t<V3>>) );
+  EXPECT_TRUE((std::is_same_v<std::weak_ordering, std::compare_three_way_result_t<V4>>) );
+  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V5>>) );
+  EXPECT_TRUE((std::is_same_v<std::partial_ordering, std::compare_three_way_result_t<V6>>) );
 }
 
 TEST(relops, three_way_propagate) {

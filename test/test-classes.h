@@ -71,9 +71,11 @@ struct no_move_t {
 };
 
 struct non_trivial_copy_t {
-  explicit non_trivial_copy_t(int x) noexcept : x{x} {}
+  explicit non_trivial_copy_t(int x) noexcept
+      : x{x} {}
 
-  non_trivial_copy_t(const non_trivial_copy_t& other) noexcept : x{other.x + 1} {}
+  non_trivial_copy_t(const non_trivial_copy_t& other) noexcept
+      : x{other.x + 1} {}
 
   int x;
 };
@@ -81,9 +83,11 @@ struct non_trivial_copy_t {
 struct move_but_no_move_assignment_t {
   move_but_no_move_assignment_t() = default;
 
-  move_but_no_move_assignment_t(move_but_no_move_assignment_t&& other) noexcept : x(other.x) {}
+  move_but_no_move_assignment_t(move_but_no_move_assignment_t&& other) noexcept
+      : x(other.x) {}
 
-  move_but_no_move_assignment_t(int val) noexcept : x(val) {}
+  move_but_no_move_assignment_t(int val) noexcept
+      : x(val) {}
 
   move_but_no_move_assignment_t(const move_but_no_move_assignment_t& other) = delete;
   move_but_no_move_assignment_t& operator=(const move_but_no_move_assignment_t& other) = delete;
@@ -100,9 +104,11 @@ struct non_trivial_copy_assignment_t {
   static constexpr int CTOR_DELTA = 5;
   static constexpr int ASSIGN_DELTA = 6;
 
-  explicit non_trivial_copy_assignment_t(int x) noexcept : x{x} {}
+  explicit non_trivial_copy_assignment_t(int x) noexcept
+      : x{x} {}
 
-  non_trivial_copy_assignment_t(const non_trivial_copy_assignment_t& other) noexcept : x(other.x + CTOR_DELTA) {}
+  non_trivial_copy_assignment_t(const non_trivial_copy_assignment_t& other) noexcept
+      : x(other.x + CTOR_DELTA) {}
 
   non_trivial_copy_assignment_t& operator=(const non_trivial_copy_assignment_t& other) noexcept {
     if (this != &other) {
@@ -115,20 +121,21 @@ struct non_trivial_copy_assignment_t {
 };
 
 struct non_trivial_int_wrapper_t {
-  non_trivial_int_wrapper_t(int x) : x{x} {}
+  non_trivial_int_wrapper_t(int x)
+      : x{x} {}
 
   non_trivial_int_wrapper_t& operator=(int i) {
     x = i + 1;
     return *this;
   }
 
-  friend constexpr bool operator==(const non_trivial_int_wrapper_t& lhs,
-                                   const non_trivial_int_wrapper_t& rhs) noexcept {
+  friend constexpr bool
+  operator==(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x == rhs.x;
   }
 
-  friend constexpr bool operator!=(const non_trivial_int_wrapper_t& lhs,
-                                   const non_trivial_int_wrapper_t& rhs) noexcept {
+  friend constexpr bool
+  operator!=(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x != rhs.x;
   }
 
@@ -136,8 +143,8 @@ struct non_trivial_int_wrapper_t {
     return lhs.x < rhs.x;
   }
 
-  friend constexpr bool operator<=(const non_trivial_int_wrapper_t& lhs,
-                                   const non_trivial_int_wrapper_t& rhs) noexcept {
+  friend constexpr bool
+  operator<=(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x <= rhs.x;
   }
 
@@ -145,13 +152,13 @@ struct non_trivial_int_wrapper_t {
     return lhs.x > rhs.x;
   }
 
-  friend constexpr bool operator>=(const non_trivial_int_wrapper_t& lhs,
-                                   const non_trivial_int_wrapper_t& rhs) noexcept {
+  friend constexpr bool
+  operator>=(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x >= rhs.x;
   }
 
-  friend constexpr auto operator<=>(const non_trivial_int_wrapper_t& lhs,
-                                    const non_trivial_int_wrapper_t& rhs) noexcept {
+  friend constexpr auto
+  operator<=>(const non_trivial_int_wrapper_t& lhs, const non_trivial_int_wrapper_t& rhs) noexcept {
     return lhs.x <=> rhs.x;
   }
 
@@ -234,9 +241,11 @@ struct coin_wrapper {
     return coin;
   }
 
-  constexpr explicit coin_wrapper(yac_coin) noexcept : coin{17} {}
+  constexpr explicit coin_wrapper(yac_coin) noexcept
+      : coin{17} {}
 
-  constexpr coin_wrapper(const coin_wrapper& other) noexcept : coin(other.coin + 1) {}
+  constexpr coin_wrapper(const coin_wrapper& other) noexcept
+      : coin(other.coin + 1) {}
 
   constexpr coin_wrapper& operator=(const coin_wrapper& other) noexcept {
     if (this != &other) {
@@ -340,7 +349,9 @@ struct comparison_counters {
 };
 
 struct custom_comparison {
-  custom_comparison(int value, comparison_counters* counters) : value(value), counters(counters) {}
+  custom_comparison(int value, comparison_counters* counters)
+      : value(value)
+      , counters(counters) {}
 
   bool operator==(const custom_comparison& other) const {
     ++counters->equal;
@@ -435,7 +446,7 @@ struct throwing_members {
   }
 
   throwing_members(const throwing_members&)
-    requires(Params.throwing_copy)
+    requires (Params.throwing_copy)
   {
     ++copy_ctor_calls;
     throw std::exception();
@@ -446,7 +457,7 @@ struct throwing_members {
   }
 
   throwing_members(throwing_members&&)
-    requires(Params.throwing_move)
+    requires (Params.throwing_move)
   {
     ++move_ctor_calls;
     throw std::exception();
@@ -458,7 +469,7 @@ struct throwing_members {
   }
 
   throwing_members& operator=(const throwing_members&)
-    requires(Params.throwing_copy || Params.throwing_copy_assignment)
+    requires (Params.throwing_copy || Params.throwing_copy_assignment)
   {
     ++copy_assignment_calls;
     throw std::exception();
@@ -470,7 +481,7 @@ struct throwing_members {
   }
 
   throwing_members& operator=(throwing_members&&)
-    requires(Params.throwing_move || Params.throwing_move_assignment)
+    requires (Params.throwing_move || Params.throwing_move_assignment)
   {
     ++move_assignment_calls;
     throw std::exception();
