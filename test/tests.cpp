@@ -212,6 +212,37 @@ TEST(correctness, empty_ctor) {
   ASSERT_TRUE(holds_alternative<int>(v));
 }
 
+TEST(correctness, converting_ctor) {
+  variant<std::string, long, std::string, char, std::string, int, std::string> v(123);
+  ASSERT_TRUE(v.index() == 5);
+  ASSERT_TRUE(holds_alternative<int>(v));
+  ASSERT_TRUE(get<int>(v) == 123);
+}
+
+TEST(correctness, const_types_copy) {
+  variant<int, const non_trivial_copy_t> v1(in_place_index<1>, 0);
+  variant<int, const non_trivial_copy_t> v2(v1);
+  ASSERT_TRUE(v2.index() == 1);
+  ASSERT_TRUE(holds_alternative<const non_trivial_copy_t>(v2));
+  ASSERT_TRUE(get<1>(v2).x == 1);
+}
+
+struct strange_non_trivial_move {
+  explicit strange_non_trivial_move(int x) : x(x) {}
+
+  strange_non_trivial_move(const strange_non_trivial_move&& other) : x(other.x + 1) {}
+
+  int x;
+};
+
+TEST(correctness, const_types_move) {
+  variant<int, const strange_non_trivial_move> v1(in_place_index<1>, 0);
+  variant<int, const strange_non_trivial_move> v2(std::move(v1));
+  ASSERT_TRUE(v2.index() == 1);
+  ASSERT_TRUE(holds_alternative<const strange_non_trivial_move>(v2));
+  ASSERT_TRUE(get<1>(v2).x == 1);
+}
+
 static constexpr bool simple_copy_ctor_test() {
   variant<int, double> x{42.0};
   variant<int, double> other{x};
