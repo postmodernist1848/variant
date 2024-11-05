@@ -17,10 +17,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     if(TREAT_WARNINGS_AS_ERRORS)
         target_compile_options(tests PRIVATE /WX)
     endif()
+    target_compile_options(tests PRIVATE /wd4244 /wd4702)
     target_compile_definitions(tests PRIVATE -D_CRT_SECURE_NO_WARNINGS)
-
-    # Apparently MSVC really doesn't like templates
-    target_compile_options(tests PRIVATE /bigobj)
 else()
     target_compile_options(tests PRIVATE -Wall -pedantic -Wextra)
     target_compile_options(tests PRIVATE -Wno-sign-compare -Wno-self-move -Wno-redundant-move)
