@@ -13,6 +13,12 @@ struct variant_size;
 template <class... Types>
 struct variant_size<variant<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {};
 
+template <class T>
+class variant_size<const T> : variant_size<T>::value {};
+
+template <class T>
+constexpr std::size_t variant_size_v = variant_size<T>::value;
+
 struct bad_variant_access : public std::exception {
   const char* what() const noexcept override {
     return "bad_variant_access";
@@ -164,6 +170,9 @@ class variant_base_impl<property::deleted, Types...> {
 template <typename... Types>
 using variant_base =
     variant_base_impl<property_of<std::is_destructible, std::is_trivially_destructible, Types...>, Types...>;
+
+template <typename Visitor, typename... Variants>
+struct storage_visit_constructor;
 
 } // namespace variant_detail
 
@@ -339,8 +348,11 @@ public:
   template <std::size_t I, typename Variant>
   friend constexpr decltype(auto) variant_detail::get_impl(Variant&& v);
 
-  template <typename Visitor, typename... Types2>
-  friend constexpr decltype(auto) visit(Visitor&& vis, variant<Types2...>& var);
+  template <typename Visitor, typename... Variants>
+  friend constexpr decltype(auto) visit(Visitor&& vis, Variants&&... var);
+
+  template <typename Visitor, typename... Variants>
+  friend struct variant_detail::storage_visit_constructor;
 };
 
 // we don't want to expose a template <std::size_t, typename T> get(T) overload to the user
@@ -385,30 +397,96 @@ constexpr T&& get(variant<Types...>&& v) {
 }
 
 namespace variant_detail {
-template <typename Visitor, typename... Types>
-constexpr decltype(auto) visit_storage(Visitor&& vis, variant_detail::storage<Types...>& storage, std::size_t i) {
-  if (i == 0) {
-    return vis(storage.value);
-  } else if constexpr (sizeof...(Types) > 1) {
-    return visit_storage(std::forward<Visitor>(vis), storage.next, i - 1);
+
+template <class T>
+struct storage_size;
+
+template <class... Types>
+struct storage_size<storage<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {};
+
+template <class T>
+constexpr std::size_t storage_size_v = storage_size<T>::value;
+
+template <std::size_t... Is>
+struct first_non_zero : std::integral_constant<std::size_t, 0> {};
+
+template <std::size_t... Is>
+struct first_non_zero<0, Is...> : std::integral_constant<std::size_t, 1 + first_non_zero<Is...>::value> {};
+
+template <>
+struct first_non_zero<> : std::integral_constant<std::size_t, 0> {};
+
+static_assert(first_non_zero<1, 1>::value == 0);
+static_assert(first_non_zero<0, 1>::value == 1);
+static_assert(first_non_zero<0, 0, 1>::value == 2);
+static_assert(first_non_zero<0, 0, 0>::value == 3);
+
+// Helper for compile-time for loop
+template <std::size_t Start, std::size_t End, typename Func>
+constexpr void for_constexpr(Func&& func) {
+  if constexpr (Start < End) {
+    func(std::integral_constant<std::size_t, Start>{});
+    for_constexpr<Start + 1, End>(std::forward<Func>(func));
   }
 }
 
+// (sizeof...(Sizes)+1)-dimensional array that holds type T
+template <typename T, std::size_t Size, std::size_t... Sizes>
+struct table {
+  table<T, Sizes...> arr[Size];
+
+  template <typename Constructor, std::size_t... PrevIs, std::size_t... Is>
+  constexpr table(Constructor c, std::index_sequence<PrevIs...> prev, std::index_sequence<Is...>)
+      : arr{table<T, Sizes...>(c, std::index_sequence<PrevIs..., Is>{})...} {}
+
+  template <typename Constructor, std::size_t... PrevIs>
+  constexpr explicit table(Constructor c, std::index_sequence<PrevIs...> is = std::index_sequence<>{})
+      : table(c, is, std::make_index_sequence<Size>{}) {}
+
+  template <typename... Indices>
+  constexpr T operator()(std::size_t i, Indices... indices) const {
+    return arr[i](indices...);
+  }
+};
+
+template <typename T, std::size_t Size>
+struct table<T, Size> {
+  T arr[Size];
+
+  template <typename Constructor, std::size_t... PrevIs, std::size_t... Is>
+  constexpr table(Constructor, std::index_sequence<PrevIs...>, std::index_sequence<Is...>)
+      : arr{Constructor::template value<PrevIs..., Is>...} {}
+
+  template <typename Constructor, std::size_t... PrevIs>
+  constexpr explicit table(Constructor c, std::index_sequence<PrevIs...> is = std::index_sequence<>{})
+      : table(c, is, std::make_index_sequence<Size>{}) {}
+
+  constexpr T operator()(std::size_t i) const {
+    return arr[i];
+  }
+};
+
+template <typename Visitor, typename... Storages>
+struct storage_visit_constructor {
+  template <std::size_t... Is>
+  static constexpr auto* value = +[](Visitor&& vis, Storages&&... storages) {
+    return vis(storage_get<Is>(std::forward<Storages>(storages))...);
+  };
+};
+
+template <typename Variant>
+using storage_of = decltype((std::declval<Variant>()._storage));
+
 } // namespace variant_detail
 
-template <typename Visitor, typename... Types>
-constexpr decltype(auto) visit(Visitor&& vis, variant<Types...>& var) {
-  // constexpr auto overloads =
-  // std::make_tuple(static_cast<std::invoke_result_t<Visitor, Types> (Visitor::*)(Types)>(&vis.operator())...);
-
-  // return vis->*(arr(var[0]._index, var[1]._index, ...))();
-
-  // return (vis->*overloads[var.index()])(var)
-  // array<Visitor>(vars.index()...)(vis, vars)
-  return variant_detail::visit_storage(std::forward<Visitor>(vis), var._storage, var._index);
-}
-
-template <class Visitor, class... Variants>
+template <typename Visitor, typename... Variants>
 constexpr decltype(auto) visit(Visitor&& vis, Variants&&... vars) {
-  // array<Visitor>(vars.index()...)(vis, vars)
+  using namespace variant_detail;
+
+  using R = decltype(vis(storage_get<0>(std::forward<Variants>(vars)._storage)...));
+  using table = table<R (*const)(Visitor, storage_of<Variants>...), variant_size_v<std::remove_cvref_t<Variants>>...>;
+  using Constructor = storage_visit_constructor<Visitor, storage_of<Variants>...>;
+
+  constexpr table tbl(Constructor{});
+  return tbl(vars.index()...)(std::forward<Visitor>(vis), std::forward<Variants>(vars)._storage...);
 }
