@@ -14,7 +14,7 @@ template <class... Types>
 struct variant_size<variant<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {};
 
 template <class T>
-class variant_size<const T> : variant_size<T>::value {};
+struct variant_size<const T> : variant_size<T> {};
 
 template <class T>
 constexpr std::size_t variant_size_v = variant_size<T>::value;
@@ -45,59 +45,97 @@ inline constexpr std::size_t variant_npos = -1;
 
 namespace variant_detail {
 
+namespace storage {
 template <typename Type, typename... Types>
 union storage {
+  constexpr storage() {}
+
+  constexpr ~storage()
+    requires (!(std::conjunction_v<std::is_trivially_destructible<Type>, std::is_trivially_destructible<Types>...>) )
+  {}
+
+  constexpr ~storage() = default;
+
   Type value;
   storage<Types...> next;
 };
 
 template <typename Type>
 union storage<Type> {
+  constexpr storage() {}
+
+  constexpr ~storage()
+    requires (!std::is_trivially_destructible_v<Type>)
+  {}
+
+  constexpr ~storage() = default;
+
   Type value;
 };
 
+namespace runtime {
+// these functions operate on (possibly) runtime index of storage
+
 template <typename Storage, typename... Types>
-constexpr void construct_storage(std::size_t i, storage<Types...>& s, Storage&& other) {
+constexpr void construct(std::size_t i, storage<Types...>& s, Storage&& other) {
   if (i == 0) {
     std::construct_at(std::addressof(s.value), std::forward<Storage>(other).value);
   } else if constexpr (sizeof...(Types) > 1) {
-    construct_storage(i - 1, s.next, std::forward<Storage>(other).next);
+    construct(i - 1, s.next, std::forward<Storage>(other).next);
   }
 }
 
 template <typename Storage, typename... Types>
-constexpr void assign_storage(std::size_t i, storage<Types...>& s, Storage&& other) {
+constexpr void assign(std::size_t i, storage<Types...>& s, Storage&& other) {
   if (i == 0) {
     s.value = std::forward<Storage>(other).value;
   } else if constexpr (sizeof...(Types) > 1) {
-    assign_storage(i - 1, s.next, std::forward<Storage>(other).next);
+    assign(i - 1, s.next, std::forward<Storage>(other).next);
   }
 }
 
 template <typename... Types>
-constexpr void destroy_storage(std::size_t i, storage<Types...>& s) {
+constexpr void destroy(std::size_t i, storage<Types...>& s) {
   if (i == 0) {
     std::destroy_at(std::addressof(s.value));
   } else if constexpr (sizeof...(Types) > 1) {
-    destroy_storage(i - 1, s.next);
+    destroy(i - 1, s.next);
+  }
+}
+
+} // namespace runtime
+
+namespace constant {
+// these functions operate on a compile-time constant index of storage
+
+template <std::size_t I, typename... Types, typename... Args>
+constexpr void construct(storage<Types...>& s, Args&&... args) {
+  if constexpr (I == 0) {
+    std::construct_at(std::addressof(s.value), std::forward<Args>(args)...);
+  } else if constexpr (sizeof...(Types) > 1) {
+    std::construct_at(&s.next); // activate next
+    construct<I - 1>(s.next, std::forward<Args>(args)...);
   }
 }
 
 template <std::size_t I, typename Storage>
-constexpr auto&& storage_get(Storage&& v) {
+constexpr auto&& get(Storage&& v) {
   if constexpr (I == 0) {
     return std::forward<Storage>(v).value;
   } else {
-    return storage_get<I - 1>(std::forward<Storage>(v).next);
+    return get<I - 1>(std::forward<Storage>(v).next);
   }
 }
+
+} // namespace constant
+} // namespace storage
 
 template <std::size_t I, typename Variant>
 constexpr decltype(auto) get_impl(Variant&& v) {
   if (I != v.index()) {
     throw bad_variant_access{};
   }
-  return storage_get<I>(std::forward<Variant>(v)._storage);
+  return storage::constant::get<I>(std::forward<Variant>(v)._storage);
 }
 
 template <typename T>
@@ -140,36 +178,21 @@ using is_trivially_move_assignable = std::bool_constant<
     std::is_trivially_move_constructible_v<T> && std::is_trivially_move_assignable_v<T> &&
     std::is_trivially_destructible_v<T>>;
 
-template <property prop, typename... Types>
-class variant_base_impl {
+template <typename... Types>
+class variant_base {
 public:
-  variant_base_impl() {}
+  constexpr variant_base() {}
 
-  // present
-  ~variant_base_impl() {
-    destroy_storage(_index, _storage);
-  }
+  constexpr ~variant_base() = default;
 
-private:
-  variant_detail::storage<Types...> _storage;
+  constexpr ~variant_base()
+    requires (!std::conjunction_v<std::is_trivially_destructible<Types>...>)
+  {}
+
+protected:
+  variant_detail::storage::storage<Types...> _storage;
   std::size_t _index = 0;
 };
-
-template <typename... Types>
-class variant_base_impl<property::trivial, Types...> {
-public:
-  variant_detail::storage<Types...> _storage;
-  std::size_t _index;
-};
-
-template <typename... Types>
-class variant_base_impl<property::deleted, Types...> {
-  static_assert(false, "This probably should not exist");
-};
-
-template <typename... Types>
-using variant_base =
-    variant_base_impl<property_of<std::is_destructible, std::is_trivially_destructible, Types...>, Types...>;
 
 template <typename Visitor, typename... Variants>
 struct storage_visit_constructor;
@@ -177,34 +200,34 @@ struct storage_visit_constructor;
 } // namespace variant_detail
 
 template <class... Types>
-class variant : variant_detail::variant_base<Types...> {
-  static constexpr variant_detail::property copy_construction =
+class variant : protected variant_detail::variant_base<Types...> {
+  using property = variant_detail::property;
+  static constexpr property copy_construction =
       variant_detail::property_of<std::is_copy_constructible, std::is_trivially_copy_constructible, Types...>;
 
-  static constexpr variant_detail::property move_construction =
+  static constexpr property move_construction =
       variant_detail::property_of<std::is_move_constructible, std::is_trivially_move_constructible, Types...>;
 
-  static constexpr variant_detail::property copy_assignment = variant_detail::
+  static constexpr property copy_assignment = variant_detail::
       property_of<variant_detail::is_copy_assignable, variant_detail::is_trivially_copy_assignable, Types...>;
 
-  static constexpr variant_detail::property move_assignment = variant_detail::
+  static constexpr property move_assignment = variant_detail::
       property_of<variant_detail::is_move_assignable, variant_detail::is_trivially_move_assignable, Types...>;
 
-  using property = variant_detail::property;
   using T_0 = variant_detail::type_at_index_t<0, Types...>;
 
 public:
   constexpr variant() noexcept(std::is_nothrow_default_constructible_v<T_0>)
     requires (std::is_default_constructible_v<T_0>)
   {
-    std::construct_at(std::addressof(storage_get<0>(this->_storage)), T_0());
+    variant_detail::storage::constant::construct<0>(this->_storage, T_0());
     this->_index = 0;
   }
 
   constexpr variant(const variant& other)
     requires (variant::copy_construction == property::present)
   {
-    construct_storage(other._index, this->_storage, other._storage);
+    variant_detail::storage::runtime::construct(other._index, this->_storage, other._storage);
     this->_index = other._index;
   }
 
@@ -219,7 +242,7 @@ public:
   constexpr variant(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Types> && ...))
     requires (variant::move_construction == property::present)
   {
-    construct_storage(other._index, this->_storage, std::move(other._storage));
+    variant_detail::storage::runtime::construct(other._index, this->_storage, std::move(other._storage));
     this->_index = other._index;
   }
 
@@ -234,13 +257,15 @@ public:
   template <class T>
     requires (sizeof...(Types) > 0) && (!std::same_as<std::remove_cvref_t<T>, variant>) &&
              (!variant_detail::is_in_place_index<T>::value) && (!variant_detail::is_in_place_type<T>::value) &&
-             std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T> &&
-             requires { variant_detail::id_function<T, Types...>::f(std::declval<T>()); }
+             requires (T t) {
+               variant_detail::id_function<T, Types...>::f(t);
+             } && std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>
   constexpr variant(T&& t
   ) noexcept(std::is_nothrow_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>) {
     constexpr std::size_t i =
         variant_detail::find_type_v<variant_detail::non_narrowing_overload_t<T, Types...>, Types...>;
-    std::construct_at(std::addressof(storage_get<i>(this->_storage)), std::forward<T>(t));
+    variant_detail::storage::constant::construct<i>(this->_storage, std::forward<T>(t));
+    // std::construct_at(std::addressof(storage_get<i>(this->_storage)), std::forward<T>(t));
     this->_index = i;
   }
 
@@ -248,27 +273,31 @@ public:
     requires variant_detail::unique<T, Types...> && std::is_constructible_v<T, Args...>
   constexpr explicit variant(in_place_type_t<T>, Args&&... args) {
     constexpr std::size_t i = variant_detail::find_type_v<T, Types...>;
-    std::construct_at(std::addressof(storage_get<i>(this->_storage)), std::forward<Args>(args)...);
+    variant_detail::storage::constant::construct<i>(this->_storage, std::forward<Args>(args)...);
+    // std::construct_at(std::addressof(storage_get<i>(this->_storage)), std::forward<Args>(args)...);
     this->_index = i;
   }
 
   template <class T, class U, class... Args>
     requires variant_detail::unique<T, Types...> && std::is_constructible_v<T, std::initializer_list<U>&, Args...>
-  constexpr explicit variant(std::in_place_type_t<T>, std::initializer_list<U> il, Args&&... args) {
+  constexpr explicit variant(in_place_type_t<T>, std::initializer_list<U> il, Args&&... args) {
     constexpr std::size_t i = variant_detail::find_type_v<T, Types...>;
-    std::construct_at(std::addressof(storage_get<i>(this->_storage)), il, std::forward<Args>(args)...);
+    variant_detail::storage::constant::construct<i>(this->_storage, il, std::forward<Args>(args)...);
+    // std::construct_at(std::addressof(storage_get<i>(this->_storage)), il, std::forward<Args>(args)...);
     this->_index = i;
   }
 
   template <std::size_t I, class... Args>
-  constexpr explicit variant(std::in_place_index_t<I>, Args&&... args) {
-    std::construct_at(std::addressof(storage_get<I>(this->_storage)), std::forward<Args>(args)...);
+  constexpr explicit variant(in_place_index_t<I>, Args&&... args) {
+    variant_detail::storage::constant::construct<I>(this->_storage, std::forward<Args>(args)...);
+    // std::construct_at(std::addressof(storage_get<I>(this->_storage)), std::forward<Args>(args)...);
     this->_index = I;
   }
 
   template <std::size_t I, class U, class... Args>
-  constexpr explicit variant(std::in_place_index_t<I>, std::initializer_list<U> il, Args&&... args) {
-    std::construct_at(std::addressof(storage_get<I>(this->_storage)), il, std::forward<Args>(args)...);
+  constexpr explicit variant(in_place_index_t<I>, std::initializer_list<U> il, Args&&... args) {
+    variant_detail::storage::constant::construct<I>(this->_storage, il, std::forward<Args>(args)...);
+    // std::construct_at(std::addressof(storage_get<I>(this->_storage)), il, std::forward<Args>(args)...);
     this->_index = I;
   }
 
@@ -288,47 +317,71 @@ public:
     requires (std::is_constructible_v<variant_detail::type_at_index_t<I, Types...>, Args...>)
   variant_alternative_t<I, variant>& emplace(Args&&... args) {
     if (!valueless_by_exception()) {
-      destroy_storage(this->_index, this->_storage);
+      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
     }
     this->_index = variant_npos; // in case of exception
-    std::construct_at(std::addressof(storage_get<I>(this->_storage)), std::forward<Args>(args)...);
+    variant_detail::storage::constant::construct<I>(this->_storage, std::forward<Args>(args)...);
+    // std::construct_at(std::addressof(storage_get<I>(this->_storage)), std::forward<Args>(args)...);
     this->_index = I;
-    return storage_get<I>(this->_storage);
+    return variant_detail::storage::constant::get<I>(this->_storage);
   }
 
   template <std::size_t I, class U, class... Args>
     requires (std::is_constructible_v<variant_detail::type_at_index_t<I, Types...>, std::initializer_list<U>&, Args...>)
   variant_alternative_t<I, variant>& emplace(std::initializer_list<U> il, Args&&... args) {
     if (!valueless_by_exception()) {
-      destroy_storage(this->_index, this->_storage);
+      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
     }
     this->_index = variant_npos;
-    std::construct_at(std::addressof(storage_get<I>(this->_storage)), il, std::forward<Args>(args)...);
+    variant_detail::storage::constant::construct<I>(this->_storage, il, std::forward<Args>(args)...);
+    // std::construct_at(std::addressof(storage_get<I>(this->_storage)), il, std::forward<Args>(args)...);
     this->_index = I;
-    return storage_get<I>(this->_storage);
+    return variant_detail::storage::constant::get<I>(this->_storage);
   }
 
-  /*
-  constexpr variant& operator=(variant&& rhs)
+  constexpr variant& operator=(const variant& rhs)
     requires (copy_assignment == property::present)
   {
-    if (this == std::addressof(rhs)) {
+    if (this == &rhs) {
       return *this;
     }
-    if (rhs.valueless_by_exception()) {
-      if (!valueless_by_exception()) {
-        destroy_storage(this->_index, this->_storage);
-        this->_index = variant_npos;
-      }
+    if (valueless_by_exception() && rhs.valueless_by_exception()) {
       return *this;
     }
 
-    if (this->_index == rhs.index()) {
-      assign_storage(this->_index, this->_storage, rhs.storage);
+    if (rhs.valueless_by_exception()) {
+      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+      this->_index = variant_npos;
+    }
+
+    if (this->_index == rhs._index) {
+      variant_detail::storage::runtime::assign(this->_index, this->_storage, rhs.storage);
       return *this;
     }
+
+    // Otherwise, if the alternative held by rhs is either nothrow copy constructible or not nothrow move constructible
+    // ..., equivalent to this->emplace<rhs.index()>(*std::get_if<rhs.index()>(std::addressof(rhs))).
+
+    // Otherwise, equivalent to this->operator=(variant(rhs))
+    visit(
+        [this, &rhs](auto y) {
+          using right_alternative = std::remove_cvref_t<decltype(y)>;
+          if constexpr (std::is_nothrow_copy_constructible_v<right_alternative> ||
+                        !std::is_nothrow_move_constructible_v<right_alternative>) {
+            if (!valueless_by_exception()) {
+              variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+            }
+            this->_index = variant_npos; // in case of exception
+            variant_detail::storage::runtime::construct(rhs._index, this->_storage, rhs._storage);
+            this->_index = rhs._storage;
+          } else {
+            this->operator=(variant(rhs));
+          }
+        },
+        rhs
+    );
+    return *this;
   }
-   */
 
   constexpr variant& operator=(const variant& rhs)
     requires (copy_assignment == property::trivial)
@@ -336,6 +389,61 @@ public:
   constexpr variant& operator=(const variant& rhs)
     requires (copy_assignment == property::deleted)
   = delete;
+
+  constexpr variant& operator=(variant&& rhs)
+    requires (move_assignment == property::present)
+  {
+    if (this == &rhs) {
+      return *this;
+    }
+    if (valueless_by_exception() && rhs.valueless_by_exception()) {
+      return *this;
+    }
+
+    if (rhs.valueless_by_exception()) {
+      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+      this->_index = variant_npos;
+    }
+
+    if (this->_index == rhs._index) {
+      variant_detail::storage::runtime::assign(this->_index, this->_storage, rhs.storage);
+      return *this;
+    }
+    if (!valueless_by_exception()) {
+      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+    }
+    this->_index = variant_npos; // in case of exception
+    variant_detail::storage::runtime::construct(rhs.index(), this->_storage, std::move(rhs)._storage);
+    this->_index = rhs._index;
+    return *this;
+  }
+
+  constexpr variant& operator=(variant&& rhs)
+    requires (move_assignment == property::trivial)
+  = default;
+
+  /*
+  constexpr variant& operator=(variant&& rhs)
+    requires (move_assignment == property::deleted)
+  = delete;
+   */
+
+  template <class T>
+    requires (!std::same_as<std::remove_cvref_t<T>, variant>) &&
+             requires (T t) { variant_detail::id_function<T, Types...>::f(t); } &&
+             std::is_assignable_v<variant_detail::non_narrowing_overload_t<T, Types...>&, T> &&
+             std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>
+  variant& operator=(T&& t
+  ) noexcept(std::is_nothrow_assignable_v<variant_detail::non_narrowing_overload_t<T, Types...>&, T> && std::is_nothrow_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>) {
+    using T_j = variant_detail::non_narrowing_overload_t<T, Types...>;
+    if (T_j* pv = get_if<T_j>(this)) {
+      *pv = std::forward<T>(t);
+    } else if (std::is_nothrow_constructible_v<T_j, T> || !std::is_nothrow_move_constructible_v<T_j>) {
+      this->emplace<variant_detail::find_type_v<T_j>>(std::forward<T>(t));
+    } else {
+      this->emplace<variant_detail::find_type_v<T_j>>(T_j(std::forward<T>(t)));
+    }
+  }
 
   constexpr bool valueless_by_exception() const noexcept {
     return index() == variant_npos;
@@ -355,7 +463,36 @@ public:
   friend struct variant_detail::storage_visit_constructor;
 };
 
-// we don't want to expose a template <std::size_t, typename T> get(T) overload to the user
+template <std::size_t I, class... Types>
+constexpr std::add_pointer_t<variant_alternative_t<I, variant<Types...>>> get_if(variant<Types...>* pv) noexcept {
+  if (pv && I == pv->index()) {
+    return get<I>(*pv);
+  } else {
+    return nullptr;
+  }
+}
+
+template <std::size_t I, class... Types>
+constexpr std::add_pointer_t<const variant_alternative_t<I, variant<Types...>>> get_if(const variant<Types...>* pv
+) noexcept {
+  if (pv && I == pv->index()) {
+    return get<I>(*pv);
+  } else {
+    return nullptr;
+  }
+}
+
+template <class T, class... Types>
+constexpr std::add_pointer_t<T> get_if(variant<Types...>* pv) noexcept {
+  return get_if<variant_detail::find_type_v<T, Types...>>(pv);
+}
+
+template <class T, class... Types>
+constexpr std::add_pointer_t<const T> get_if(const variant<Types...>* pv) noexcept {
+  return get_if<variant_detail::find_type_v<T, Types...>>(pv);
+}
+
+// we don't want to expose a template <std::size_t, typename T> get(T) overload to the user?
 template <std::size_t I, typename... Types>
 constexpr const variant_alternative_t<I, variant<Types...>>& get(const variant<Types...>& v) {
   return variant_detail::get_impl<I>(v);
@@ -402,7 +539,7 @@ template <class T>
 struct storage_size;
 
 template <class... Types>
-struct storage_size<storage<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {};
+struct storage_size<storage::storage<Types...>> : std::integral_constant<std::size_t, sizeof...(Types)> {};
 
 template <class T>
 constexpr std::size_t storage_size_v = storage_size<T>::value;
@@ -436,7 +573,7 @@ struct table {
   table<T, Sizes...> arr[Size];
 
   template <typename Constructor, std::size_t... PrevIs, std::size_t... Is>
-  constexpr table(Constructor c, std::index_sequence<PrevIs...> prev, std::index_sequence<Is...>)
+  constexpr table(Constructor c, std::index_sequence<PrevIs...>, std::index_sequence<Is...>)
       : arr{table<T, Sizes...>(c, std::index_sequence<PrevIs..., Is>{})...} {}
 
   template <typename Constructor, std::size_t... PrevIs>
@@ -470,7 +607,7 @@ template <typename Visitor, typename... Storages>
 struct storage_visit_constructor {
   template <std::size_t... Is>
   static constexpr auto* value = +[](Visitor&& vis, Storages&&... storages) {
-    return vis(storage_get<Is>(std::forward<Storages>(storages))...);
+    return vis(storage::constant::get<Is>(std::forward<Storages>(storages))...);
   };
 };
 
@@ -483,7 +620,7 @@ template <typename Visitor, typename... Variants>
 constexpr decltype(auto) visit(Visitor&& vis, Variants&&... vars) {
   using namespace variant_detail;
 
-  using R = decltype(vis(storage_get<0>(std::forward<Variants>(vars)._storage)...));
+  using R = decltype(vis(variant_detail::storage::constant::get<0>(std::forward<Variants>(vars)._storage)...));
   using table = table<R (*const)(Visitor, storage_of<Variants>...), variant_size_v<std::remove_cvref_t<Variants>>...>;
   using Constructor = storage_visit_constructor<Visitor, storage_of<Variants>...>;
 

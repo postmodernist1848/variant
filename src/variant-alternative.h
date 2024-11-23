@@ -15,3 +15,11 @@ struct variant_alternative<I, variant<Types...>> {
 
 template <std::size_t I, typename T>
 using variant_alternative_t = variant_alternative<I, T>::type;
+
+template <std::size_t I, class T>
+struct variant_alternative<I, const T> : variant_alternative<I, T> {};
+
+template <class T, class... Types>
+constexpr bool holds_alternative(const variant<Types...>& v) noexcept {
+  return variant_detail::find_type_v<T, Types...> == v.index();
+}
