@@ -187,15 +187,16 @@ public:
 
   constexpr ~variant_base()
     requires (!std::conjunction_v<std::is_trivially_destructible<Types>...>)
-  {}
+  {
+    if (_index != variant_npos) {
+      storage::runtime::destroy(_index, _storage);
+    }
+  }
 
 protected:
   variant_detail::storage::storage<Types...> _storage;
   std::size_t _index = 0;
 };
-
-template <typename Visitor, typename... Variants>
-struct storage_visit_constructor;
 
 } // namespace variant_detail
 
@@ -220,7 +221,7 @@ public:
   constexpr variant() noexcept(std::is_nothrow_default_constructible_v<T_0>)
     requires (std::is_default_constructible_v<T_0>)
   {
-    variant_detail::storage::constant::construct<0>(this->_storage, T_0());
+    variant_detail::storage::constant::construct<0>(this->_storage);
     this->_index = 0;
   }
 
@@ -257,8 +258,8 @@ public:
   template <class T>
     requires (sizeof...(Types) > 0) && (!std::same_as<std::remove_cvref_t<T>, variant>) &&
              (!variant_detail::is_in_place_index<T>::value) && (!variant_detail::is_in_place_type<T>::value) &&
-             requires (T t) {
-               variant_detail::id_function<T, Types...>::f(t);
+             requires {
+               variant_detail::id_function<T, Types...>::f(std::declval<T>());
              } && std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>
   constexpr variant(T&& t
   ) noexcept(std::is_nothrow_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>) {
@@ -302,15 +303,15 @@ public:
   }
 
   template <class T, class... Args>
-    requires variant_detail::unique<T, Args...> && (std::is_constructible_v<T, Args...>)
+    requires variant_detail::unique<T, Types...> && (std::is_constructible_v<T, Args...>)
   T& emplace(Args&&... args) {
-    return emplace<variant_detail::find_type_v<T, Args...>>(std::forward<Args>(args)...);
+    return emplace<variant_detail::find_type_v<T, Types...>>(std::forward<Args>(args)...);
   }
 
   template <class T, class U, class... Args>
-    requires variant_detail::unique<T, Args...> && (std::is_constructible_v<T, std::initializer_list<U>&, Args...>)
+    requires variant_detail::unique<T, Types...> && (std::is_constructible_v<T, std::initializer_list<U>&, Args...>)
   T& emplace(std::initializer_list<U> il, Args&&... args) {
-    return emplace<variant_detail::find_type_v<T, Args...>>(il, std::forward<Args>(args)...);
+    return emplace<variant_detail::find_type_v<T, Types...>>(il, std::forward<Args>(args)...);
   }
 
   template <std::size_t I, class... Args>
@@ -318,8 +319,8 @@ public:
   variant_alternative_t<I, variant>& emplace(Args&&... args) {
     if (!valueless_by_exception()) {
       variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+      this->_index = variant_npos;
     }
-    this->_index = variant_npos; // in case of exception
     variant_detail::storage::constant::construct<I>(this->_storage, std::forward<Args>(args)...);
     // std::construct_at(std::addressof(storage_get<I>(this->_storage)), std::forward<Args>(args)...);
     this->_index = I;
@@ -331,8 +332,8 @@ public:
   variant_alternative_t<I, variant>& emplace(std::initializer_list<U> il, Args&&... args) {
     if (!valueless_by_exception()) {
       variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+      this->_index = variant_npos;
     }
-    this->_index = variant_npos;
     variant_detail::storage::constant::construct<I>(this->_storage, il, std::forward<Args>(args)...);
     // std::construct_at(std::addressof(storage_get<I>(this->_storage)), il, std::forward<Args>(args)...);
     this->_index = I;
@@ -355,25 +356,24 @@ public:
     }
 
     if (this->_index == rhs._index) {
-      variant_detail::storage::runtime::assign(this->_index, this->_storage, rhs.storage);
+      variant_detail::storage::runtime::assign(this->_index, this->_storage, rhs._storage);
       return *this;
     }
 
     // Otherwise, if the alternative held by rhs is either nothrow copy constructible or not nothrow move constructible
     // ..., equivalent to this->emplace<rhs.index()>(*std::get_if<rhs.index()>(std::addressof(rhs))).
-
     // Otherwise, equivalent to this->operator=(variant(rhs))
     visit(
-        [this, &rhs](auto y) {
+        [this, &rhs](auto&& y) {
           using right_alternative = std::remove_cvref_t<decltype(y)>;
           if constexpr (std::is_nothrow_copy_constructible_v<right_alternative> ||
                         !std::is_nothrow_move_constructible_v<right_alternative>) {
             if (!valueless_by_exception()) {
               variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+              this->_index = variant_npos;
             }
-            this->_index = variant_npos; // in case of exception
             variant_detail::storage::runtime::construct(rhs._index, this->_storage, rhs._storage);
-            this->_index = rhs._storage;
+            this->_index = rhs._index;
           } else {
             this->operator=(variant(rhs));
           }
@@ -406,13 +406,13 @@ public:
     }
 
     if (this->_index == rhs._index) {
-      variant_detail::storage::runtime::assign(this->_index, this->_storage, rhs.storage);
+      variant_detail::storage::runtime::assign(this->_index, this->_storage, std::move(rhs)._storage);
       return *this;
     }
     if (!valueless_by_exception()) {
       variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+      this->_index = variant_npos;
     }
-    this->_index = variant_npos; // in case of exception
     variant_detail::storage::runtime::construct(rhs.index(), this->_storage, std::move(rhs)._storage);
     this->_index = rhs._index;
     return *this;
@@ -430,7 +430,7 @@ public:
 
   template <class T>
     requires (!std::same_as<std::remove_cvref_t<T>, variant>) &&
-             requires (T t) { variant_detail::id_function<T, Types...>::f(t); } &&
+             requires { variant_detail::id_function<T, Types...>::f(std::declval<T>()); } &&
              std::is_assignable_v<variant_detail::non_narrowing_overload_t<T, Types...>&, T> &&
              std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>
   variant& operator=(T&& t
@@ -439,10 +439,53 @@ public:
     if (T_j* pv = get_if<T_j>(this)) {
       *pv = std::forward<T>(t);
     } else if (std::is_nothrow_constructible_v<T_j, T> || !std::is_nothrow_move_constructible_v<T_j>) {
-      this->emplace<variant_detail::find_type_v<T_j>>(std::forward<T>(t));
+      // TODO: why use find_type_v?
+      this->emplace<variant_detail::find_type_v<T_j, Types...>>(std::forward<T>(t));
     } else {
-      this->emplace<variant_detail::find_type_v<T_j>>(T_j(std::forward<T>(t)));
+      this->emplace<variant_detail::find_type_v<T_j, Types...>>(T_j(std::forward<T>(t)));
     }
+    return *this;
+  }
+
+  constexpr void swap(variant& rhs
+  ) noexcept(((std::is_nothrow_move_constructible_v<Types> && std::is_nothrow_swappable_v<Types>) && ...)) {
+    if (this->valueless_by_exception() && rhs.valueless_by_exception()) {
+      return;
+    }
+    if (this->valueless_by_exception() && !rhs.valueless_by_exception()) {
+      variant_detail::storage::runtime::construct(rhs._index, this->_storage, std::move(rhs)._storage);
+      this->_index = rhs._index;
+      return;
+    }
+    if (!this->valueless_by_exception() && rhs.valueless_by_exception()) {
+      variant_detail::storage::runtime::construct(this->_index, rhs._storage, std::move(*this)._storage);
+      rhs._index = this->_index;
+      return;
+    }
+    if (this->index() == rhs.index()) {
+      visit(
+          [](auto& x, auto& y) {
+            using std::swap;
+            if constexpr (std::is_same_v<decltype(x), decltype(y)>) {
+              swap(x, y);
+            }
+          },
+          *this,
+          rhs
+      );
+      return;
+    }
+
+    variant tmp(std::move(*this));
+    variant_detail::storage::runtime::destroy(this->_index, this->_storage);
+    this->_index = variant_npos;
+    variant_detail::storage::runtime::construct(rhs._index, this->_storage, std::move(rhs)._storage);
+    this->_index = rhs._index;
+
+    variant_detail::storage::runtime::destroy(rhs._index, rhs._storage);
+    rhs._index = variant_npos;
+    variant_detail::storage::runtime::construct(tmp._index, rhs._storage, std::move(tmp)._storage);
+    rhs._index = tmp._index;
   }
 
   constexpr bool valueless_by_exception() const noexcept {
@@ -459,14 +502,14 @@ public:
   template <typename Visitor, typename... Variants>
   friend constexpr decltype(auto) visit(Visitor&& vis, Variants&&... var);
 
-  template <typename Visitor, typename... Variants>
-  friend struct variant_detail::storage_visit_constructor;
+  template <class R, class Visitor, class... Variants>
+  friend constexpr R visit(Visitor&& vis, Variants&&... vars);
 };
 
 template <std::size_t I, class... Types>
 constexpr std::add_pointer_t<variant_alternative_t<I, variant<Types...>>> get_if(variant<Types...>* pv) noexcept {
   if (pv && I == pv->index()) {
-    return get<I>(*pv);
+    return &get<I>(*pv);
   } else {
     return nullptr;
   }
@@ -476,7 +519,7 @@ template <std::size_t I, class... Types>
 constexpr std::add_pointer_t<const variant_alternative_t<I, variant<Types...>>> get_if(const variant<Types...>* pv
 ) noexcept {
   if (pv && I == pv->index()) {
-    return get<I>(*pv);
+    return &get<I>(*pv);
   } else {
     return nullptr;
   }
@@ -603,16 +646,13 @@ struct table<T, Size> {
   }
 };
 
-template <typename Visitor, typename... Storages>
+template <typename R, typename Visitor, typename... Storages>
 struct storage_visit_constructor {
   template <std::size_t... Is>
-  static constexpr auto* value = +[](Visitor&& vis, Storages&&... storages) {
+  static constexpr R (*const value)(Visitor&&, Storages&&...) = +[](Visitor&& vis, Storages&&... storages) -> R {
     return vis(storage::constant::get<Is>(std::forward<Storages>(storages))...);
   };
 };
-
-template <typename Variant>
-using storage_of = decltype((std::declval<Variant>()._storage));
 
 } // namespace variant_detail
 
@@ -620,10 +660,211 @@ template <typename Visitor, typename... Variants>
 constexpr decltype(auto) visit(Visitor&& vis, Variants&&... vars) {
   using namespace variant_detail;
 
+  // TODO: implement in terms of visit<R>
+  if ((vars.valueless_by_exception() || ...)) {
+    throw bad_variant_access{};
+  }
+
   using R = decltype(vis(variant_detail::storage::constant::get<0>(std::forward<Variants>(vars)._storage)...));
-  using table = table<R (*const)(Visitor, storage_of<Variants>...), variant_size_v<std::remove_cvref_t<Variants>>...>;
-  using Constructor = storage_visit_constructor<Visitor, storage_of<Variants>...>;
+  using table = table<
+      R (*const)(Visitor&&, decltype((std::declval<Variants>()._storage))...),
+      variant_size_v<std::remove_cvref_t<Variants>>...>;
+  using Constructor = storage_visit_constructor<R, Visitor, decltype((std::declval<Variants>()._storage))...>;
 
   constexpr table tbl(Constructor{});
   return tbl(vars.index()...)(std::forward<Visitor>(vis), std::forward<Variants>(vars)._storage...);
+}
+
+template <class R, class Visitor, class... Variants>
+constexpr R visit(Visitor&& vis, Variants&&... vars) {
+  if ((vars.valueless_by_exception() || ...)) {
+    throw bad_variant_access{};
+  }
+
+  using namespace variant_detail;
+  using table = table<
+      R (*const)(Visitor&&, decltype((std::declval<Variants>()._storage))...),
+      variant_size_v<std::remove_cvref_t<Variants>>...>;
+  using Constructor = storage_visit_constructor<R, Visitor, decltype((std::declval<Variants>()._storage))...>;
+
+  constexpr table tbl(Constructor{});
+  return tbl(vars.index()...)(std::forward<Visitor>(vis), std::forward<Variants>(vars)._storage...);
+}
+
+template <typename... Types>
+constexpr bool operator==(const variant<Types...>& v, const variant<Types...>& w) {
+  if (v.index() != w.index()) {
+    return false;
+  }
+  if (v.valueless_by_exception()) {
+    return true;
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> bool {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a == b;
+        } else {
+          return false;
+        }
+      },
+      v,
+      w
+  );
+}
+
+template <typename... Types>
+constexpr bool operator!=(const variant<Types...>& v, const variant<Types...>& w) {
+  if (v.index() != w.index()) {
+    return true;
+  }
+  if (v.valueless_by_exception()) {
+    return false;
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> bool {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a != b;
+        } else {
+          return false;
+        }
+      },
+      v,
+      w
+  );
+}
+
+template <typename... Types>
+constexpr bool operator<(const variant<Types...>& v, const variant<Types...>& w) {
+  if (w.valueless_by_exception()) {
+    return false;
+  }
+  if (v.valueless_by_exception()) {
+    return true;
+  }
+  if (v.index() < w.index()) {
+    return true;
+  }
+  if (v.index() > w.index()) {
+    return false;
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> bool {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a < b;
+        } else {
+          return false;
+        }
+      },
+      v,
+      w
+  );
+}
+
+template <typename... Types>
+constexpr bool operator>(const variant<Types...>& v, const variant<Types...>& w) {
+  if (v.valueless_by_exception()) {
+    return false;
+  }
+  if (w.valueless_by_exception()) {
+    return true;
+  }
+  if (v.index() > w.index()) {
+    return true;
+  }
+  if (v.index() < w.index()) {
+    return false;
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> bool {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a > b;
+        } else {
+          return false;
+        }
+      },
+      v,
+      w
+  );
+}
+
+template <typename... Types>
+constexpr bool operator<=(const variant<Types...>& v, const variant<Types...>& w) {
+  if (v.valueless_by_exception()) {
+    return true;
+  }
+  if (w.valueless_by_exception()) {
+    return false;
+  }
+  if (v.index() < w.index()) {
+    return true;
+  }
+  if (v.index() > w.index()) {
+    return false;
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> bool {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a <= b;
+        } else {
+          return false;
+        }
+      },
+      v,
+      w
+  );
+}
+
+template <typename... Types>
+constexpr bool operator>=(const variant<Types...>& v, const variant<Types...>& w) {
+  if (w.valueless_by_exception()) {
+    return true;
+  }
+  if (v.valueless_by_exception()) {
+    return false;
+  }
+  if (v.index() > w.index()) {
+    return true;
+  }
+  if (v.index() < w.index()) {
+    return false;
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> bool {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a >= b;
+        } else {
+          return false;
+        }
+      },
+      v,
+      w
+  );
+}
+
+template <typename... Types>
+constexpr std::common_comparison_category_t<std::compare_three_way_result_t<Types>...>
+operator<=>(const variant<Types...>& v, const variant<Types...>& w) {
+  if (w.valueless_by_exception() && v.valueless_by_exception()) {
+    return std::strong_ordering::equal;
+  }
+  if (v.valueless_by_exception()) {
+    return std::strong_ordering::less;
+  }
+  if (w.valueless_by_exception()) {
+    return std::strong_ordering::greater;
+  }
+  if (v.index() != w.index()) {
+    return v.index() <=> w.index();
+  }
+  return visit(
+      [](auto&& a, auto&& b) -> std::common_comparison_category_t<std::compare_three_way_result_t<Types>...> {
+        if constexpr (std::is_same_v<decltype(a), decltype(b)>) {
+          return a <=> b;
+        } else {
+          return std::strong_ordering::less;
+        }
+      },
+      v,
+      w
+  );
 }

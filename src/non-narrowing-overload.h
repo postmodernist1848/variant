@@ -12,19 +12,19 @@ template <typename T, typename Head, typename... Types>
 struct id_function : id_function<T, Types...> {
   using id_function<T, Types...>::f;
 
-  static constexpr Head f(Head)
+  static constexpr std::type_identity<Head> f(Head)
     requires non_narrowing_convertible<T, Head>;
 };
 
 template <typename T, typename Head>
 struct id_function<T, Head> {
-  static constexpr Head f(Head)
+  static constexpr std::type_identity<Head> f(Head)
     requires non_narrowing_convertible<T, Head>;
 };
 
 template <typename T, typename... Types>
 struct non_narrowing_overload {
-  using type = decltype(id_function<T, Types...>::f(std::declval<T>()));
+  using type = decltype(id_function<T, Types...>::f(std::declval<T>()))::type;
 };
 
 template <typename T, typename... Types>
