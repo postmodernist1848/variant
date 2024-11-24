@@ -2,8 +2,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace variant_detail {
-namespace storage {
+namespace variant_detail::storage {
 template <typename Type, typename... Types>
 union storage {
   constexpr storage() {}
@@ -86,5 +85,4 @@ constexpr auto&& get(Storage&& v) {
 }
 
 } // namespace constant
-} // namespace storage
-} // namespace variant_detail
+} // namespace variant_detail::storage
