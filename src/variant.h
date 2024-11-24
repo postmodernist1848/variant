@@ -5,118 +5,11 @@
 #include "storage.h"
 #include "type-by-index.h"
 #include "variant-alternative.h"
+#include "visit.h"
 
 #include <exception>
 
 namespace variant_detail {
-
-enum class property {
-  present,
-  trivial,
-  deleted
-};
-
-template <template <typename> typename IsPresent, template <typename> typename IsTrivial, typename... Types>
-inline constexpr property property_of =
-    std::conjunction_v<IsTrivial<Types>...>
-        ? property::trivial
-        : (std::conjunction_v<IsPresent<Types>...> ? property::present : property::deleted);
-
-template <typename T>
-using is_copy_assignable = std::bool_constant<std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>>;
-
-template <typename T>
-using is_move_assignable = std::bool_constant<std::is_move_constructible_v<T> && std::is_move_assignable_v<T>>;
-
-template <typename T>
-using is_trivially_copy_assignable = std::bool_constant<
-    std::is_trivially_copy_constructible_v<T> && std::is_trivially_copy_assignable_v<T> &&
-    std::is_trivially_destructible_v<T>>;
-
-template <typename T>
-using is_trivially_move_assignable = std::bool_constant<
-    std::is_trivially_move_constructible_v<T> && std::is_trivially_move_assignable_v<T> &&
-    std::is_trivially_destructible_v<T>>;
-
-template <typename... Types>
-class variant_base {
-public:
-  constexpr variant_base()
-      : _index(variant_npos) {}
-
-  constexpr ~variant_base() = default;
-
-  constexpr ~variant_base()
-    requires (!std::conjunction_v<std::is_trivially_destructible<Types>...>)
-  {
-    if (_index != variant_npos) {
-      storage::runtime::destroy(_index, _storage);
-    }
-  }
-
-protected:
-  storage::storage<Types...> _storage;
-  std::size_t _index = 0;
-};
-
-// (sizeof...(Sizes)+1)-dimensional array that holds type T
-template <typename T, std::size_t Size, std::size_t... Sizes>
-struct table {
-  table<T, Sizes...> arr[Size];
-
-  // Construct is a class with a static template member 'value' of type T
-  template <typename Constructor, std::size_t... PrevIs, std::size_t... Is>
-  constexpr table(Constructor c, std::index_sequence<PrevIs...>, std::index_sequence<Is...>)
-      : arr{table<T, Sizes...>(c, std::index_sequence<PrevIs..., Is>{})...} {}
-
-  template <typename Constructor, std::size_t... PrevIs>
-  constexpr explicit table(Constructor c, std::index_sequence<PrevIs...> is = std::index_sequence<>{})
-      : table(c, is, std::make_index_sequence<Size>{}) {}
-
-  template <typename... Indices>
-  constexpr T operator()(std::size_t i, Indices... indices) const {
-    return arr[i](indices...);
-  }
-};
-
-template <typename T, std::size_t Size>
-struct table<T, Size> {
-  T arr[Size];
-
-  template <typename Constructor, std::size_t... PrevIs, std::size_t... Is>
-  constexpr table(Constructor, std::index_sequence<PrevIs...>, std::index_sequence<Is...>)
-      : arr{Constructor::template value<PrevIs..., Is>...} {}
-
-  template <typename Constructor, std::size_t... PrevIs>
-  constexpr explicit table(Constructor c, std::index_sequence<PrevIs...> is = std::index_sequence<>{})
-      : table(c, is, std::make_index_sequence<Size>{}) {}
-
-  constexpr T operator()(std::size_t i) const {
-    return arr[i];
-  }
-};
-
-template <typename R, typename Visitor, typename... Storages>
-struct storage_visit_constructor {
-  template <std::size_t... Is>
-  static constexpr auto value = +[](Visitor&& vis, Storages&&... storages) -> R {
-    return std::forward<Visitor>(vis)(storage::constant::get<Is>(std::forward<Storages>(storages))...);
-  };
-};
-
-template <class R, class Visitor, class... Variants>
-constexpr R visit_impl(Visitor&& vis, Variants&&... vars) {
-  using namespace variant_detail;
-  if ((vars.valueless_by_exception() || ...)) {
-    throw bad_variant_access{};
-  }
-  using table = table<
-      R (*const)(Visitor&&, decltype((std::declval<Variants>()._storage))...),
-      variant_size_v<std::remove_cvref_t<Variants>>...>;
-  using Constructor = storage_visit_constructor<R, Visitor, decltype((std::declval<Variants>()._storage))...>;
-  constexpr table tbl(Constructor{});
-  return tbl(vars.index()...)(std::forward<Visitor>(vis), std::forward<Variants>(vars)._storage...);
-}
 
 template <typename T>
 struct is_in_place_type : std::false_type {};
@@ -206,7 +99,6 @@ public:
     constexpr std::size_t i =
         variant_detail::find_type_v<variant_detail::non_narrowing_overload_t<T, Types...>, Types...>;
     variant_detail::storage::constant::construct<i>(this->_storage, std::forward<T>(t));
-    // std::construct_at(std::addressof(storage_get<i>(this->_storage)), std::forward<T>(t));
     this->_index = i;
   }
 
@@ -215,7 +107,6 @@ public:
   constexpr explicit variant(in_place_type_t<T>, Args&&... args) {
     constexpr std::size_t i = variant_detail::find_type_v<T, Types...>;
     variant_detail::storage::constant::construct<i>(this->_storage, std::forward<Args>(args)...);
-    // std::construct_at(std::addressof(storage_get<i>(this->_storage)), std::forward<Args>(args)...);
     this->_index = i;
   }
 
@@ -521,21 +412,6 @@ constexpr const T&& get(const variant<Types...>&& v) {
 template <typename T, typename... Types>
 constexpr T&& get(variant<Types...>&& v) {
   return variant_detail::get_impl<variant_detail::find_type_v<T, Types...>>(std::move(v));
-}
-
-namespace variant_detail {} // namespace variant_detail
-
-template <typename Visitor, typename... Variants>
-constexpr decltype(auto) visit(Visitor&& vis, Variants&&... vars) {
-  using R = decltype(std::forward<Visitor>(vis)(
-      variant_detail::storage::constant::get<0>(std::forward<Variants>(vars)._storage)...
-  ));
-  return variant_detail::visit_impl<R>(std::forward<Visitor>(vis), std::forward<Variants>(vars)...);
-}
-
-template <class R, class Visitor, class... Variants>
-constexpr R visit(Visitor&& vis, Variants&&... vars) {
-  return variant_detail::visit_impl<R>(std::forward<Visitor>(vis), std::forward<Variants>(vars)...);
 }
 
 template <typename... Types>
