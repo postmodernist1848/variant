@@ -13,7 +13,7 @@ union storage {
 
   constexpr ~storage() = default;
 
-  Type value;
+  std::remove_const_t<Type> value;
   storage<Types...> next;
 };
 
@@ -27,7 +27,7 @@ union storage<Type> {
 
   constexpr ~storage() = default;
 
-  Type value;
+  std::remove_const_t<Type> value;
 };
 
 namespace runtime {
