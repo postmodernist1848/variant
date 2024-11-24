@@ -5,7 +5,6 @@
 #include "variant-alternative.h"
 
 #include <exception>
-#include <iostream>
 
 template <class T>
 struct variant_size;
@@ -181,7 +180,8 @@ using is_trivially_move_assignable = std::bool_constant<
 template <typename... Types>
 class variant_base {
 public:
-  constexpr variant_base() {}
+  constexpr variant_base()
+      : _index(variant_npos) {}
 
   constexpr ~variant_base() = default;
 
@@ -243,7 +243,7 @@ public:
   constexpr variant(variant&& other) noexcept((std::is_nothrow_move_constructible_v<Types> && ...))
     requires (variant::move_construction == property::present)
   {
-    variant_detail::storage::runtime::construct(other._index, this->_storage, std::move(other._storage));
+    variant_detail::storage::runtime::construct(other._index, this->_storage, std::move(other)._storage);
     this->_index = other._index;
   }
 
@@ -360,7 +360,8 @@ public:
       return *this;
     }
 
-    // Otherwise, if the alternative held by rhs is either nothrow copy constructible or not nothrow move constructible
+    // Otherwise, if the alternative held by rhs is either nothrow copy constructible or not nothrow move
+    // constructible
     // ..., equivalent to this->emplace<rhs.index()>(*std::get_if<rhs.index()>(std::addressof(rhs))).
     // Otherwise, equivalent to this->operator=(variant(rhs))
     visit(
