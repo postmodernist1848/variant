@@ -41,7 +41,7 @@ struct in_place_index_t {
 template <std::size_t I>
 constexpr in_place_index_t<I> in_place_index{};
 
-inline constexpr std::size_t variant_npos = -1;
+inline constexpr std::size_t variant_npos = std::size_t(-1);
 
 namespace variant_detail {
 

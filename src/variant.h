@@ -269,7 +269,7 @@ public:
     using T_j = variant_detail::non_narrowing_overload_t<T, Types...>;
     if (T_j* pv = get_if<T_j>(this)) {
       *pv = std::forward<T>(t);
-    } else if (std::is_nothrow_constructible_v<T_j, T> || !std::is_nothrow_move_constructible_v<T_j>) {
+    } else if constexpr (std::is_nothrow_constructible_v<T_j, T> || !std::is_nothrow_move_constructible_v<T_j>) {
       this->emplace<T_j>(std::forward<T>(t));
     } else {
       this->emplace<T_j>(T_j(std::forward<T>(t)));
