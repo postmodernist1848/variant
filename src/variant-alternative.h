@@ -1,8 +1,8 @@
 #pragma once
 
-#include "type-by-index.h"
+#include "type-at-index.h"
 
-template <class... Types>
+template <typename... Types>
 class variant;
 
 template <std::size_t I, typename T>

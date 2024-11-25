@@ -19,27 +19,12 @@ struct variant_size<const T> : variant_size<T> {};
 template <class T>
 constexpr std::size_t variant_size_v = variant_size<T>::value;
 
-struct bad_variant_access : public std::exception {
+class bad_variant_access : public std::exception {
+public:
   const char* what() const noexcept override {
     return "bad_variant_access";
   }
 };
-
-template <class T>
-struct in_place_type_t {
-  explicit in_place_type_t() = default;
-};
-
-template <class T>
-constexpr in_place_type_t<T> in_place_type{};
-
-template <std::size_t I>
-struct in_place_index_t {
-  explicit in_place_index_t() = default;
-};
-
-template <std::size_t I>
-constexpr in_place_index_t<I> in_place_index{};
 
 inline constexpr std::size_t variant_npos = std::size_t(-1);
 

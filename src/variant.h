@@ -1,13 +1,27 @@
 #pragma once
 
-#include "base.h"
 #include "non-narrowing-overload.h"
 #include "storage.h"
-#include "type-by-index.h"
+#include "type-at-index.h"
 #include "variant-alternative.h"
+#include "variant-base.h"
 #include "visit.h"
 
-#include <exception>
+template <class T>
+struct in_place_type_t {
+  explicit in_place_type_t() = default;
+};
+
+template <class T>
+constexpr in_place_type_t<T> in_place_type{};
+
+template <std::size_t I>
+struct in_place_index_t {
+  explicit in_place_index_t() = default;
+};
+
+template <std::size_t I>
+constexpr in_place_index_t<I> in_place_index{};
 
 namespace variant_detail {
 
