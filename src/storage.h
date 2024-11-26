@@ -51,15 +51,6 @@ constexpr void assign(std::size_t i, storage<Types...>& s, Storage&& other) {
   }
 }
 
-template <typename... Types>
-constexpr void destroy(std::size_t i, storage<Types...>& s) {
-  if (i == 0) {
-    std::destroy_at(std::addressof(s.value));
-  } else if constexpr (sizeof...(Types) > 1) {
-    destroy(i - 1, s.next);
-  }
-}
-
 } // namespace runtime
 
 namespace constant {
@@ -69,7 +60,7 @@ template <std::size_t I, typename... Types, typename... Args>
 constexpr void construct(storage<Types...>& s, Args&&... args) {
   if constexpr (I == 0) {
     std::construct_at(std::addressof(s.value), std::forward<Args>(args)...);
-  } else if constexpr (sizeof...(Types) > 1) {
+  } else {
     std::construct_at(&s.next); // activate next
     construct<I - 1>(s.next, std::forward<Args>(args)...);
   }

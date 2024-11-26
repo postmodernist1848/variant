@@ -178,8 +178,7 @@ public:
     requires (std::is_constructible_v<variant_detail::type_at_index_t<I, Types...>, Args...>)
   variant_alternative_t<I, variant>& emplace(Args&&... args) {
     if (!valueless_by_exception()) {
-      variant_detail::storage::runtime::destroy(_index, _storage);
-      _index = variant_npos;
+      destroy();
     }
     variant_detail::storage::constant::construct<I>(_storage, std::forward<Args>(args)...);
     _index = I;
@@ -190,8 +189,7 @@ public:
     requires (std::is_constructible_v<variant_detail::type_at_index_t<I, Types...>, std::initializer_list<U>&, Args...>)
   variant_alternative_t<I, variant>& emplace(std::initializer_list<U> il, Args&&... args) {
     if (!valueless_by_exception()) {
-      variant_detail::storage::runtime::destroy(_index, _storage);
-      _index = variant_npos;
+      destroy();
     }
     variant_detail::storage::constant::construct<I>(_storage, il, std::forward<Args>(args)...);
     _index = I;
@@ -209,8 +207,7 @@ public:
     }
 
     if (rhs.valueless_by_exception()) {
-      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
-      this->_index = variant_npos;
+      this->destroy();
     }
 
     if (this->_index == rhs._index) {
@@ -228,8 +225,7 @@ public:
           if constexpr (std::is_nothrow_copy_constructible_v<right_alternative> ||
                         !std::is_nothrow_move_constructible_v<right_alternative>) {
             if (!valueless_by_exception()) {
-              variant_detail::storage::runtime::destroy(this->_index, this->_storage);
-              this->_index = variant_npos;
+              destroy();
             }
             variant_detail::storage::runtime::construct(rhs._index, this->_storage, rhs._storage);
             this->_index = rhs._index;
@@ -261,8 +257,7 @@ public:
     }
 
     if (rhs.valueless_by_exception()) {
-      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
-      this->_index = variant_npos;
+      destroy();
     }
 
     if (this->_index == rhs._index) {
@@ -270,8 +265,7 @@ public:
       return *this;
     }
     if (!valueless_by_exception()) {
-      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
-      this->_index = variant_npos;
+      destroy();
     }
     variant_detail::storage::runtime::construct(rhs.index(), this->_storage, std::move(rhs)._storage);
     this->_index = rhs._index;
@@ -311,8 +305,8 @@ public:
   constexpr ~variant()
     requires (!std::conjunction_v<std::is_trivially_destructible<Types>...>)
   {
-    if (_index != variant_npos) {
-      variant_detail::storage::runtime::destroy(_index, _storage);
+    if (!valueless_by_exception()) {
+      destroy();
     }
   }
 
@@ -328,15 +322,13 @@ public:
     if (this->valueless_by_exception() && !rhs.valueless_by_exception()) {
       variant_detail::storage::runtime::construct(rhs._index, this->_storage, std::move(rhs)._storage);
       this->_index = rhs._index;
-      variant_detail::storage::runtime::destroy(rhs._index, rhs._storage);
-      rhs._index = variant_npos;
+      rhs.destroy();
       return;
     }
     if (!this->valueless_by_exception() && rhs.valueless_by_exception()) {
       variant_detail::storage::runtime::construct(this->_index, rhs._storage, std::move(*this)._storage);
       rhs._index = this->_index;
-      variant_detail::storage::runtime::destroy(this->_index, this->_storage);
-      this->_index = variant_npos;
+      this->destroy();
       return;
     }
     if (this->index() == rhs.index()) {
@@ -354,13 +346,11 @@ public:
     }
 
     variant tmp(std::move(*this));
-    variant_detail::storage::runtime::destroy(this->_index, this->_storage);
-    this->_index = variant_npos;
+    this->destroy();
     variant_detail::storage::runtime::construct(rhs._index, this->_storage, std::move(rhs)._storage);
     this->_index = rhs._index;
 
-    variant_detail::storage::runtime::destroy(rhs._index, rhs._storage);
-    rhs._index = variant_npos;
+    rhs.destroy();
     variant_detail::storage::runtime::construct(tmp._index, rhs._storage, std::move(tmp)._storage);
     rhs._index = tmp._index;
   }
@@ -374,6 +364,11 @@ public:
   }
 
 private:
+  void destroy() {
+    visit([](auto& x) { std::destroy_at(std::addressof(x)); }, *this);
+    _index = variant_npos;
+  }
+
   variant_detail::storage::storage<Types...> _storage;
   std::size_t _index = 0;
 
