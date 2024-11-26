@@ -3,27 +3,42 @@
 #include "non-narrowing-overload.h"
 #include "storage.h"
 #include "type-at-index.h"
-#include "variant-alternative.h"
-#include "variant-base.h"
+#include "variant-classes.h"
 #include "visit.h"
 
-template <class T>
-struct in_place_type_t {
-  explicit in_place_type_t() = default;
-};
+#include <type_traits>
 
-template <class T>
-constexpr in_place_type_t<T> in_place_type{};
-
-template <std::size_t I>
-struct in_place_index_t {
-  explicit in_place_index_t() = default;
-};
-
-template <std::size_t I>
-constexpr in_place_index_t<I> in_place_index{};
+inline constexpr std::size_t variant_npos = std::size_t(-1);
 
 namespace variant_detail {
+
+enum class property {
+  present,
+  trivial,
+  deleted
+};
+
+template <template <typename> typename IsPresent, template <typename> typename IsTrivial, typename... Types>
+inline constexpr property property_of =
+    std::conjunction_v<IsTrivial<Types>...>
+        ? property::trivial
+        : (std::conjunction_v<IsPresent<Types>...> ? property::present : property::deleted);
+
+template <typename T>
+using is_copy_assignable = std::bool_constant<std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>>;
+
+template <typename T>
+using is_move_assignable = std::bool_constant<std::is_move_constructible_v<T> && std::is_move_assignable_v<T>>;
+
+template <typename T>
+using is_trivially_copy_assignable = std::bool_constant<
+    std::is_trivially_copy_constructible_v<T> && std::is_trivially_copy_assignable_v<T> &&
+    std::is_trivially_destructible_v<T>>;
+
+template <typename T>
+using is_trivially_move_assignable = std::bool_constant<
+    std::is_trivially_move_constructible_v<T> && std::is_trivially_move_assignable_v<T> &&
+    std::is_trivially_destructible_v<T>>;
 
 template <typename T>
 struct is_in_place_type : std::false_type {};
@@ -48,7 +63,7 @@ constexpr decltype(auto) get_impl(Variant&& v) {
 } // namespace variant_detail
 
 template <class... Types>
-class variant : protected variant_detail::variant_base<Types...> {
+class variant {
   using property = variant_detail::property;
   static constexpr property copy_construction =
       variant_detail::property_of<std::is_copy_constructible, std::is_trivially_copy_constructible, Types...>;
@@ -291,6 +306,16 @@ public:
     return *this;
   }
 
+  constexpr ~variant() = default;
+
+  constexpr ~variant()
+    requires (!std::conjunction_v<std::is_trivially_destructible<Types>...>)
+  {
+    if (_index != variant_npos) {
+      variant_detail::storage::runtime::destroy(_index, _storage);
+    }
+  }
+
   friend constexpr void swap(variant& lhs, variant<Types...>& rhs) noexcept(noexcept(lhs.swap(rhs))) {
     lhs.swap(rhs);
   }
@@ -347,6 +372,10 @@ public:
   constexpr std::size_t index() const noexcept {
     return this->_index;
   }
+
+private:
+  variant_detail::storage::storage<Types...> _storage;
+  std::size_t _index = 0;
 
   template <std::size_t I, typename Variant>
   friend constexpr decltype(auto) variant_detail::get_impl(Variant&& v);

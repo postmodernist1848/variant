@@ -1,5 +1,6 @@
 #pragma once
-#include "variant-base.h"
+
+#include "variant-classes.h"
 
 #include <utility>
 
