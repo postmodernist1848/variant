@@ -44,7 +44,7 @@ struct table<T, Size> {
 };
 
 template <typename R, typename Visitor, typename... Variants>
-struct storage_visit_constructor {
+struct visit_constructor {
   template <std::size_t... Is>
   static constexpr auto value = +[](Visitor&& vis, Variants&&... vars) -> R {
     return std::forward<Visitor>(vis)(get<Is>(std::forward<Variants>(vars))...);
@@ -58,7 +58,7 @@ constexpr R visit_impl(Visitor&& vis, Variants&&... vars) {
     throw bad_variant_access{};
   }
   using table = table<R (*const)(Visitor&&, Variants&&...), variant_size_v<std::remove_cvref_t<Variants>>...>;
-  constexpr table tbl(storage_visit_constructor<R, Visitor, Variants&&...>{});
+  constexpr table tbl(visit_constructor<R, Visitor, Variants&&...>{});
   return tbl(vars.index()...)(std::forward<Visitor>(vis), std::forward<Variants>(vars)...);
 }
 
