@@ -30,6 +30,12 @@ struct non_trivially_destructible_t {
   }
 };
 
+struct constexpr_non_trivially_destructible_t {
+  constexpr ~constexpr_non_trivially_destructible_t() {}
+
+  int x;
+};
+
 struct throwing_default_t {
   throwing_default_t() {
     throw std::exception();
@@ -118,6 +124,18 @@ struct non_trivial_copy_assignment_t {
   }
 
   int x;
+};
+
+struct non_trivial_copy_with_trivial_move_t {
+  non_trivial_copy_with_trivial_move_t(const non_trivial_copy_with_trivial_move_t&) {}
+
+  non_trivial_copy_with_trivial_move_t(non_trivial_copy_with_trivial_move_t&&) = default;
+
+  non_trivial_copy_with_trivial_move_t& operator=(const non_trivial_copy_with_trivial_move_t&) {
+    return *this;
+  }
+
+  non_trivial_copy_with_trivial_move_t& operator=(non_trivial_copy_with_trivial_move_t&&) = default;
 };
 
 struct non_trivial_int_wrapper_t {

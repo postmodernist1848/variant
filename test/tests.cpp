@@ -135,6 +135,7 @@ TEST(traits, move_assignment) {
   using variant6 = variant<int, std::string, throwing_move_operator_t, double>;
   using variant7 = variant<int, throwing_move_assignment_t, double>;
   using variant8 = variant<int, double, no_move_t>;
+  using variant9 = std::variant<non_trivial_copy_with_trivial_move_t>;
   ASSERT_FALSE(std::is_move_assignable_v<variant1>);
   ASSERT_FALSE(std::is_move_assignable_v<variant2>);
   ASSERT_TRUE(std::is_move_assignable_v<variant3>);
@@ -151,6 +152,7 @@ TEST(traits, move_assignment) {
   ASSERT_TRUE(std::is_nothrow_move_assignable_v<variant4>);
   ASSERT_TRUE(std::is_nothrow_move_assignable_v<variant5>);
   ASSERT_FALSE(std::is_move_assignable_v<variant8>);
+  ASSERT_TRUE(std::is_trivially_move_assignable_v<variant9>);
 }
 
 TEST(traits, converting_assignment) {
@@ -718,7 +720,7 @@ TEST(visits, visit_result_forwarding) {
   ASSERT_TRUE((std::is_same_v<decltype(visit([&](auto) -> const int&& { return std::move(x); }, var)), const int&&>) );
 }
 
-TEST(swap, valueless) {
+TEST(swap, both_valueless) {
   throwing_move_operator_t::swap_called = 0;
   using V = variant<int, throwing_move_operator_t>;
   V a = 14;
@@ -734,6 +736,35 @@ TEST(swap, valueless) {
   ASSERT_TRUE(a.valueless_by_exception());
   ASSERT_TRUE(b.valueless_by_exception());
   a.swap(b);
+  ASSERT_TRUE(a.valueless_by_exception());
+  ASSERT_TRUE(b.valueless_by_exception());
+  ASSERT_EQ(throwing_move_operator_t::swap_called, 0);
+}
+
+TEST(swap, one_valueless) {
+  using V = variant<non_trivially_destructible_t, throwing_move_operator_t>;
+  V a;
+  V b;
+  ASSERT_ANY_THROW({
+    V tmp(in_place_index<1>);
+    a = std::move(tmp);
+  });
+  ASSERT_TRUE(a.valueless_by_exception());
+
+  non_trivially_destructible_t::destructor_count = 0;
+  throwing_move_operator_t::swap_called = 0;
+  a.swap(b);
+  ASSERT_FALSE(a.valueless_by_exception());
+  ASSERT_TRUE(b.valueless_by_exception());
+  ASSERT_NE(non_trivially_destructible_t::destructor_count, 0);
+  ASSERT_EQ(throwing_move_operator_t::swap_called, 0);
+
+  non_trivially_destructible_t::destructor_count = 0;
+  throwing_move_operator_t::swap_called = 0;
+  a.swap(b);
+  ASSERT_TRUE(a.valueless_by_exception());
+  ASSERT_FALSE(b.valueless_by_exception());
+  ASSERT_NE(non_trivially_destructible_t::destructor_count, 0);
   ASSERT_EQ(throwing_move_operator_t::swap_called, 0);
 }
 
@@ -869,6 +900,21 @@ TEST(assignment, converting_assignment2_const) {
   EXPECT_EQ(get<1>(v3), 6);
   EXPECT_EQ(get<1>(v4), 7);
   EXPECT_EQ(get<1>(v5), 6);
+}
+
+TEST(assignment, duplicated_type_with_throwing_copy_ctor) {
+  struct throwing_copy {
+    throwing_copy() = default;
+
+    throwing_copy(const throwing_copy&) {}
+
+    throwing_copy(throwing_copy&&) noexcept {}
+
+    throwing_copy& operator=(const throwing_copy&) = default;
+  };
+
+  variant<throwing_copy, throwing_copy> a, b;
+  a = b;
 }
 
 TEST(valueless_by_exception, copy_assign_nothrow) {
@@ -1313,3 +1359,79 @@ TEST(relops, three_way_propagate) {
     EXPECT_EQ(v1 <=> v2, std::partial_ordering::unordered);
   }
 }
+
+static_assert([] {
+  variant<constexpr_non_trivially_destructible_t, int, int> a;
+  a.emplace<2>(42);
+
+  return true;
+}());
+
+static_assert([] {
+  variant<const int, const constexpr_non_trivially_destructible_t> a;
+  auto b = a;
+
+  return true;
+}());
+
+static_assert([] {
+  using A = constexpr_non_trivially_destructible_t;
+  using V = variant<int, const int, const A, A>;
+
+  {
+    V a1(in_place_index<1>, 42);
+    V b1 = a1;
+    if (b1.index() != a1.index()) {
+      return false;
+    }
+  }
+
+  {
+    V a2(in_place_index<2>);
+    V b2 = a2;
+    if (b2.index() != a2.index()) {
+      return false;
+    }
+  }
+
+  return true;
+}());
+
+static_assert([] {
+  using A = constexpr_non_trivially_destructible_t;
+  using V = variant<int, int, A, A>;
+
+  {
+    V a1(in_place_index<1>, 42);
+    V b1 = a1;
+    if (b1.index() != a1.index()) {
+      return false;
+    }
+    b1 = a1;
+    if (b1.index() != a1.index()) {
+      return false;
+    }
+    b1 = std::move(a1);
+    if (b1.index() != a1.index()) {
+      return false;
+    }
+  }
+
+  {
+    V a2(in_place_index<2>);
+    V b2 = a2;
+    if (b2.index() != a2.index()) {
+      return false;
+    }
+    b2 = a2;
+    if (b2.index() != a2.index()) {
+      return false;
+    }
+    b2 = std::move(a2);
+    if (b2.index() != a2.index()) {
+      return false;
+    }
+  }
+
+  return true;
+}());
