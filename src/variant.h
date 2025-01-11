@@ -176,7 +176,7 @@ public:
 
   template <std::size_t I, class... Args>
     requires (std::is_constructible_v<variant_detail::type_at_index_t<I, Types...>, Args...>)
-  variant_alternative_t<I, variant>& emplace(Args&&... args) {
+  constexpr variant_alternative_t<I, variant>& emplace(Args&&... args) {
     if (!valueless_by_exception()) {
       destroy();
     }
@@ -187,7 +187,7 @@ public:
 
   template <std::size_t I, class U, class... Args>
     requires (std::is_constructible_v<variant_detail::type_at_index_t<I, Types...>, std::initializer_list<U>&, Args...>)
-  variant_alternative_t<I, variant>& emplace(std::initializer_list<U> il, Args&&... args) {
+  constexpr variant_alternative_t<I, variant>& emplace(std::initializer_list<U> il, Args&&... args) {
     if (!valueless_by_exception()) {
       destroy();
     }
@@ -364,7 +364,7 @@ public:
   }
 
 private:
-  void destroy() {
+  constexpr void destroy() {
     visit([](auto& x) { std::destroy_at(std::addressof(x)); }, *this);
     _index = variant_npos;
   }
