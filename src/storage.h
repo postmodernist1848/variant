@@ -1,4 +1,5 @@
 #pragma once
+
 #include <memory>
 #include <type_traits>
 
@@ -34,21 +35,10 @@ namespace runtime {
 // these functions operate on (possibly) runtime index of storage
 
 template <typename Storage, typename... Types>
-constexpr void construct(std::size_t i, storage<Types...>& s, Storage&& other) {
-  if (i == 0) {
-    std::construct_at(std::addressof(s.value), std::forward<Storage>(other).value);
-  } else if constexpr (sizeof...(Types) > 1) {
-    std::construct_at(&s.next); // activate next
-    construct(i - 1, s.next, std::forward<Storage>(other).next);
-  }
-}
-
-template <typename Storage, typename... Types>
 constexpr void assign(std::size_t i, storage<Types...>& s, Storage&& other) {
   if (i == 0) {
     s.value = std::forward<Storage>(other).value;
   } else if constexpr (sizeof...(Types) > 1) {
-    std::construct_at(&s.next); // activate next
     assign(i - 1, s.next, std::forward<Storage>(other).next);
   }
 }

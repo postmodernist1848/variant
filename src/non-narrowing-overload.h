@@ -1,4 +1,5 @@
 #pragma once
+
 #include <utility>
 
 namespace variant_detail {
@@ -8,21 +9,27 @@ namespace variant_detail {
 template <typename T, typename U>
 concept non_narrowing_convertible = requires (T t) { new U[1]{std::forward<T>(t)}; };
 
+template <typename T, typename... Types>
+struct id_function;
+
 template <typename T, typename Head, typename... Types>
-struct id_function : id_function<T, Types...> {
+struct id_function<T, Head, Types...> : id_function<T, Types...> {
   using id_function<T, Types...>::f;
 
   static constexpr std::type_identity<Head> f(Head)
     requires non_narrowing_convertible<T, Head>;
 };
 
-template <typename T, typename Head>
-struct id_function<T, Head> {
-  static constexpr std::type_identity<Head> f(Head)
-    requires non_narrowing_convertible<T, Head>;
+template <typename T>
+struct id_function<T> {
+  static constexpr void f();
 };
 
 template <typename T, typename... Types>
+concept f_well_formed = requires { id_function<T, Types...>::f(std::declval<T>()); };
+
+template <typename T, typename... Types>
+  requires f_well_formed<T, Types...>
 struct non_narrowing_overload {
   using type = decltype(id_function<T, Types...>::f(std::declval<T>()))::type;
 };

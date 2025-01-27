@@ -47,39 +47,38 @@ template <typename R, typename Visitor, typename... Variants>
 struct visit_constructor {
   template <std::size_t... Is>
   static constexpr auto value = +[](Visitor&& vis, Variants&&... vars) -> R {
-    return std::forward<Visitor>(vis)(get<Is>(std::forward<Variants>(vars))...);
+    return std::forward<Visitor>(vis)(std::index_sequence<Is...>{}, std::forward<Variants>(vars)...);
   };
 };
 
-template <class R, class Visitor, class... Variants>
-constexpr R visit_impl(Visitor&& vis, Variants&&... vars) {
-  using namespace variant_detail;
+template <typename R, typename Visitor, typename... Variants>
+constexpr R visit_with_indices(Visitor&& vis, Variants&&... vars) {
   if ((vars.valueless_by_exception() || ...)) {
     throw bad_variant_access{};
   }
-  using table = table<R (*const)(Visitor&&, Variants&&...), variant_size_v<std::remove_cvref_t<Variants>>...>;
+  using table = table<R (*)(Visitor&&, Variants&&...), variant_size_v<std::remove_cvref_t<Variants>>...>;
   constexpr table tbl(visit_constructor<R, Visitor, Variants&&...>{});
   return tbl(vars.index()...)(std::forward<Visitor>(vis), std::forward<Variants>(vars)...);
 }
 
+template <typename R, typename Visitor, typename... Variants>
+constexpr R visit_impl(Visitor&& vis, Variants&&... vars) {
+  auto lambda = [&vis]<std::size_t... Is, typename... Variants2>(std::index_sequence<Is...>, Variants2&&... vars) -> R {
+    return std::forward<Visitor>(vis)(get<Is>(std::forward<Variants2>(vars))...);
+  };
+
+  return visit_with_indices<R>(lambda, std::forward<Variants>(vars)...);
+}
+
 } // namespace variant_detail
 
-// a different constructor can be used if same-type checking for visitors is needed
-// template <typename R, typename Visitor, typename... Variants>
-// struct visit_constructor_exact {
-//   template <std::size_t... Is>
-//   static constexpr auto value = +[](Visitor&& vis, Variants&&... vars) -> decltype(auto) {
-//     // table would not compile if visitor has different return type with some indices
-//     return std::forward<Visitor>(vis)(get<Is>(std::forward<Variants>(vars))...);
-//   };
-// };
 template <typename Visitor, typename... Variants>
 constexpr decltype(auto) visit(Visitor&& vis, Variants&&... vars) {
   using R = decltype(std::forward<Visitor>(vis)(get<0>(std::forward<Variants>(vars))...));
   return variant_detail::visit_impl<R>(std::forward<Visitor>(vis), std::forward<Variants>(vars)...);
 }
 
-template <class R, class Visitor, class... Variants>
+template <typename R, typename Visitor, typename... Variants>
 constexpr R visit(Visitor&& vis, Variants&&... vars) {
   return variant_detail::visit_impl<R>(std::forward<Visitor>(vis), std::forward<Variants>(vars)...);
 }
