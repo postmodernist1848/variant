@@ -94,7 +94,9 @@ public:
   constexpr variant() noexcept(std::is_nothrow_default_constructible_v<T_0>)
     requires (std::is_default_constructible_v<T_0>)
   {
-    emplace<0>();
+    // https://github.com/CPP-KT/variant-postmodernist1848/actions/runs/13000547056/job/36258119741?pr=1
+    variant_detail::storage::constant::construct<0>(_storage);
+    _index = 0;
   }
 
   constexpr variant(const variant& other)
@@ -129,7 +131,8 @@ public:
     requires (!std::same_as<std::remove_cvref_t<T>, variant>) && (!variant_detail::is_in_place_index<T>::value) &&
              (!variant_detail::is_in_place_type<T>::value) &&
              std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>
-  constexpr variant(T&& t
+  constexpr variant(
+      T&& t
   ) noexcept(std::is_nothrow_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>)
       : variant(in_place_type<variant_detail::non_narrowing_overload_t<T, Types...>>, std::forward<T>(t)) {}
 
@@ -271,8 +274,9 @@ public:
     lhs.swap(rhs);
   }
 
-  constexpr void swap(variant& other
-  ) noexcept(((std::is_nothrow_move_constructible_v<Types> && std::is_nothrow_swappable_v<Types>) && ...)) {
+  constexpr void swap(variant& other) noexcept(
+      ((std::is_nothrow_move_constructible_v<Types> && std::is_nothrow_swappable_v<Types>) && ...)
+  ) {
     if (this->valueless_by_exception() && other.valueless_by_exception()) {
       return;
     }
@@ -346,8 +350,8 @@ constexpr std::add_pointer_t<variant_alternative_t<I, variant<Types...>>> get_if
 }
 
 template <std::size_t I, typename... Types>
-constexpr std::add_pointer_t<const variant_alternative_t<I, variant<Types...>>> get_if(const variant<Types...>* pv
-) noexcept {
+constexpr std::add_pointer_t<const variant_alternative_t<I, variant<Types...>>>
+get_if(const variant<Types...>* pv) noexcept {
   if (pv && I == pv->index()) {
     return std::addressof(get<I>(*pv));
   } else {
