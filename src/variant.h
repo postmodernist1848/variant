@@ -131,7 +131,8 @@ public:
     requires (!std::same_as<std::remove_cvref_t<T>, variant>) && (!variant_detail::is_in_place_index<T>::value) &&
              (!variant_detail::is_in_place_type<T>::value) &&
              std::is_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>
-  constexpr variant(T&& t
+  constexpr variant(
+      T&& t
   ) noexcept(std::is_nothrow_constructible_v<variant_detail::non_narrowing_overload_t<T, Types...>, T>)
       : variant(in_place_type<variant_detail::non_narrowing_overload_t<T, Types...>>, std::forward<T>(t)) {}
 
@@ -273,8 +274,9 @@ public:
     lhs.swap(rhs);
   }
 
-  constexpr void swap(variant& other
-  ) noexcept(((std::is_nothrow_move_constructible_v<Types> && std::is_nothrow_swappable_v<Types>) && ...)) {
+  constexpr void swap(variant& other) noexcept(
+      ((std::is_nothrow_move_constructible_v<Types> && std::is_nothrow_swappable_v<Types>) && ...)
+  ) {
     if (this->valueless_by_exception() && other.valueless_by_exception()) {
       return;
     }
@@ -348,8 +350,8 @@ constexpr std::add_pointer_t<variant_alternative_t<I, variant<Types...>>> get_if
 }
 
 template <std::size_t I, typename... Types>
-constexpr std::add_pointer_t<const variant_alternative_t<I, variant<Types...>>> get_if(const variant<Types...>* pv
-) noexcept {
+constexpr std::add_pointer_t<const variant_alternative_t<I, variant<Types...>>>
+get_if(const variant<Types...>* pv) noexcept {
   if (pv && I == pv->index()) {
     return std::addressof(get<I>(*pv));
   } else {
@@ -442,32 +444,32 @@ constexpr decltype(auto) comparison_operator(const variant<Types...>& v, const v
 
 template <typename... Types>
 constexpr bool operator==(const variant<Types...>& v, const variant<Types...>& w) {
-  return variant_detail::comparison_operator(v, w, [](const auto& x, const auto& y) { return x == y; });
+  return variant_detail::comparison_operator(v, w, std::equal_to{});
 }
 
 template <typename... Types>
 constexpr bool operator!=(const variant<Types...>& v, const variant<Types...>& w) {
-  return variant_detail::comparison_operator(v, w, [](const auto& x, const auto& y) { return x != y; });
+  return variant_detail::comparison_operator(v, w, std::not_equal_to{});
 }
 
 template <typename... Types>
 constexpr bool operator<(const variant<Types...>& v, const variant<Types...>& w) {
-  return variant_detail::comparison_operator(v, w, [](const auto& x, const auto& y) { return x < y; });
+  return variant_detail::comparison_operator(v, w, std::less{});
 }
 
 template <typename... Types>
 constexpr bool operator>(const variant<Types...>& v, const variant<Types...>& w) {
-  return variant_detail::comparison_operator(v, w, [](const auto& x, const auto& y) { return x > y; });
+  return variant_detail::comparison_operator(v, w, std::greater{});
 }
 
 template <typename... Types>
 constexpr bool operator<=(const variant<Types...>& v, const variant<Types...>& w) {
-  return variant_detail::comparison_operator(v, w, [](const auto& x, const auto& y) { return x <= y; });
+  return variant_detail::comparison_operator(v, w, std::less_equal{});
 }
 
 template <typename... Types>
 constexpr bool operator>=(const variant<Types...>& v, const variant<Types...>& w) {
-  return variant_detail::comparison_operator(v, w, [](const auto& x, const auto& y) { return x >= y; });
+  return variant_detail::comparison_operator(v, w, std::greater_equal{});
 }
 
 template <typename... Types>
